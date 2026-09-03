@@ -1982,7 +1982,7 @@ intentum 只添加：
 
 intentum 的终端 logo 来自 `brand/ascii/`，两种尺寸，每种拆成 mark（`logo-*.txt`）、wordmark（`text-*.txt`）和合并后的 lockup（`banner-*.txt`）。规格与颜色规则见 `brand/README.md`，不要手绘或换字体。
 
-小号 lockup（`banner-small.txt`，57 列 × 6 行）：
+小号 lockup（`banner-small.txt`，58 列 × 6 行）：
 
 ```text
 ####            _       _             _
@@ -2016,8 +2016,9 @@ banner 只出现一次，之后界面只用 `⋗`（U+22D7）作为 intentum 的
 | 终端宽度 | 显示 |
 | --- | --- |
 | ≥ 113 列 | `banner-big.txt` |
-| 57–112 列 | `banner-small.txt` |
-| 12–56 列 | `logo-small.txt` + 同一行右侧的 `intentum`（纯文本） |
+| 58–112 列 | `banner-small.txt` |
+| 21–57 列 | `logo-small.txt` + 同一行右侧的 `intentum`（纯文本） |
+| 12–20 列 | `logo-small.txt`；空间不足时不追加 wordmark |
 | < 12 列 | 只显示 `⋗ intentum` |
 
 检测方式是 `process.stdout.columns`；无法检测时按 80 列处理，即显示小号 lockup。

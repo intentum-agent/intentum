@@ -1,0 +1,77 @@
+{
+  "name": "pi-intentum",
+  "version": "0.1.0",
+  "description": "A Pi-native product-building harness for turning product intent into verified software.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "pnpm@11.11.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/intentum-agent/intentum.git"
+  },
+  "homepage": "https://github.com/intentum-agent/intentum#readme",
+  "bugs": {
+    "url": "https://github.com/intentum-agent/intentum/issues"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "agent",
+    "product-development"
+  ],
+  "bin": {
+    "pi-intentum": "./bin/pi-intentum.mjs"
+  },
+  "files": [
+    "bin",
+    "brand",
+    "extensions",
+    "src",
+    "skills",
+    "prompts",
+    "scripts",
+    "docs",
+    "intentum.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke:rpc": "node scripts/rpc-smoke.mjs",
+    "pack:check": "node scripts/pack-check.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm smoke:rpc && pnpm pack:check"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "0.84.4",
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-tui": "0.84.4",
+    "@types/node": "^24.3.0",
+    "typebox": "1.3.7",
+    "typescript": "^5.9.2",
+    "vitest": "4.1.11"
+  }
+}
