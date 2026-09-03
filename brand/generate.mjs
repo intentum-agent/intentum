@@ -98,25 +98,20 @@ export function wordmarkGroup({ x = 0, y = 0, h, ink, dot, p = WM } = {}) {
 export const wordmarkAspect = (p = WM) => { const g = wordmarkGeom(p); return g.width / g.height; };
 
 // ------------------------------------------------------------- lockups
-export const LOCK = { markX: 1.25, gap: 0.38, stackGap: 0.34 };
+export const LOCK = { gap: 0.38, stackGap: 0.34 };
 
-// Horizontal lockup. Wordmark height = H. The mark is markX times the x-height and
-// is centred on the x-height midline, so its axis bisects the letters; it may
-// overshoot the wordmark box, which `top`/`height` report.
+// Horizontal lockup. The mark is as tall as the wordmark box, so its bottom sits
+// on the baseline and its top meets the i-dot; a mark centred on the x-height
+// would overshoot the baseline and read as sagging.
 export function lockupGroup({ x = 0, y = 0, H, ink, arms, dot, wmDot, lk = LOCK } = {}) {
-  const g = wordmarkGeom();
-  const k = H / g.height;
-  const mh = lk.markX * 100 * k;
+  const mh = H;
   const mw = mh * markAspect();
   const ww = H * wordmarkAspect();
   const gap = mw * lk.gap;
-  const mid = y + (50 - g.top) * k;
-  const my = mid - mh / 2;
-  const top = Math.min(y, my), bottom = Math.max(y + H, my + mh);
   return {
-    svg: markGroup({ x, y: my, h: mh, arms, dot }) +
+    svg: markGroup({ x, y, h: mh, arms, dot }) +
       wordmarkGroup({ x: x + mw + gap, y, h: H, ink, dot: wmDot }),
-    width: mw + gap + ww, height: bottom - top, top,
+    width: mw + gap + ww, height: H, top: y,
   };
 }
 

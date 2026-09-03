@@ -39,8 +39,9 @@ never colours the arms or the letters.
 
 - Clear space around any version equals the diameter of the point.
 - Minimum sizes: mark 16 px, tile 16 px, horizontal lockup 96 px wide, wordmark 72 px wide.
-- In lockups the mark is 1.25 × the x-height, centred on the x-height midline. Use the
-  shipped lockup files rather than re-assembling mark and wordmark.
+- In lockups the mark is as tall as the wordmark: it sits on the baseline and its top
+  meets the top of the `i` dot. Use the shipped lockup files rather than re-assembling
+  mark and wordmark.
 - Exactly one red point per logo. The lockup carries it on the mark; the standalone
   wordmark carries it on the `i`.
 - Do not rotate, outline, add gradients or shadows, change the 60° angle, move the
