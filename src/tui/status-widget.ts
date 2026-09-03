@@ -1,6 +1,12 @@
 import type { ProjectState, WorkerRecord } from "../state/schema.js";
+import { intentumLabel } from "./brand.js";
 
-export function renderStatusWidget(state: ProjectState): string[] {
+export interface StatusWidgetOptions {
+  /** Set false for terminals where the preferred U+22D7 mark is unavailable. */
+  unicode?: boolean;
+}
+
+export function renderStatusWidget(state: ProjectState, options: StatusWidgetOptions = {}): string[] {
   const workers = Object.values(state.workers);
   const active = workers.filter((worker) =>
     ["starting", "working", "pause_requested", "verifying"].includes(worker.status),
@@ -14,7 +20,7 @@ export function renderStatusWidget(state: ProjectState): string[] {
     : "no blocking decision";
 
   const lines = [
-    `intentum · ${state.projectName}    ${state.phase.toUpperCase()}`,
+    `${intentumLabel(state.projectName, options)}    ${state.phase.toUpperCase()}`,
     `Feature: ${state.activeFeatureId ?? "discovery"}`,
     `${completed.length} completed · ${active.length} active · ${attention.length} need attention · ${decisionText}`,
   ];

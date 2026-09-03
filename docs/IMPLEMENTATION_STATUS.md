@@ -15,17 +15,19 @@
 - `c3cc5b7 feat(brand): add logo assets, ascii banners, and banner spec`；
 - `0ff932d fix(brand): align lockup mark to baseline`。
 
-新版 `intentum.md` 的新增行为集中在 §15.2 Banner 与 Logo；现有 Worker、Git、状态、恢复和安全模型没有发生语义变化。品牌资产已位于 `brand/`，但以下适配尚未进入当前实现：
+新版 `intentum.md` 的新增行为集中在 §15.2 Banner 与 Logo；现有 Worker、Git、状态、恢复和安全模型没有发生语义变化。品牌资产位于 `brand/`，本轮已完成以下适配：
 
 1. `/intentum init` 首次成功后的单次响应式 Banner；
 2. 未初始化项目执行无参数 `/intentum` 时的欢迎 Banner；
 3. 按终端宽度选择 big/small/logo-only/`⋗ intentum` fallback；
 4. 只给 mark point 使用 Signal red，wordmark 保持默认前景色；
-5. status/footer 的 `⋗ intentum` 标识；
+5. status widget 的 `⋗ intentum` 标识；
 6. `pi-intentum --help`、`pi-intentum --version` CLI 入口；
 7. 将 `brand/` 纳入 npm `files` 和 pack manifest，并增加资产、宽度、一次性显示和 RPC 回归测试。
 
-因此，远端更新前的 Phase 1/2 Controller 门禁仍为 PASS；新增品牌/TUI delta 当前记录为 **PENDING**，不包含在下方 75-test PASS 的能力声明中。
+实现时还发现远端文档的宽度数据与已提交资产相差一列：`text-small.txt` 实测最大 44 列，`banner-small.txt` 实测最大 58 列。文档与选择边界已同步为 58 列起用 small banner；21–57 列使用 compact mark + wordmark；12–20 列保留 small mark。这样所有已选择的原始行都不超过可用列数。
+
+因此，远端更新前的 Phase 1/2 Controller 门禁与新增品牌/TUI delta 均已进入当前工作树门禁。`pi-intentum` 只是 help/version companion，不建立第二套 agent runtime，也不调用 provider。
 
 ## 已实现的核心路径
 
@@ -41,6 +43,8 @@
 10. result attempt identity、terminal first-wins、`agent_settled` 最终验证、provider final-error 保留、terminal runtime 释放。
 11. Controller 从 Git 独立取得 result commit/changed files，并复验 worktree registration、common-dir、branch、base ancestry、cleanliness 与 protected paths。
 12. 显式 `--no-ff` merge；target branch/base/head/Git-operation 前置校验；真实冲突自动 abort；幂等 crash reconciliation；integration 在 runtime dispose 前被 cancel/drain。
+13. 从 `brand/ascii/` 读取的响应式、一次性欢迎 Banner；Pi TUI 每行 `Text` 渲染；Signal point 精确着色；RPC 使用可序列化行且 restore 不重放。
+14. `pi-intentum --help/--version` companion、品牌资源发布白名单、真实 tarball 离线安装与已安装 bin 执行门禁。
 
 ## 关键不变量
 
@@ -68,8 +72,8 @@ pnpm exec pi --version
 
 1. TypeScript strict typecheck；
 2. Vitest unit + real filesystem/Git integration；
-3. actual Pi CLI package-directory RPC `init/status/widget` smoke；
-4. `npm pack --dry-run --json` 发布物清单检查。
+3. actual Pi CLI package-directory RPC `init/status/widget/banner` smoke；
+4. 真实 npm tarball、发布物清单、离线临时安装与已安装 CLI smoke。
 
 最终数字以本文件“最终验证记录”为准；每次代码修改后重新运行门禁，不从旧日志推断 PASS。
 
@@ -87,7 +91,8 @@ pnpm exec pi --version
 - untrusted project拒绝 Worker、session cwd mismatch、第二 live Controller ownership拒绝；
 - sandbox command layout、trusted executable paths、no root/home mount、symlink/EPIPE/abort process-group、Git-config credential boundary；
 - Pi SDK construction/restore without model invocation、final provider error mapping、actual RPC extension loading；
-- package dry-run required files。
+- 品牌资产宽度/纯 ASCII/无 ANSI、point-only 颜色 mask、一次性 TUI/RPC 欢迎生命周期；
+- companion CLI 宽度边界/help/version、真实 tarball required files、离线安装后 bin 执行。
 
 ## Sandbox 与 live gate
 
@@ -100,20 +105,20 @@ pnpm exec pi --version
 | 能力 | 当前证据 |
 | --- | --- |
 | Controller/state/real-Git/recovery | 自动化 PASS |
-| Pi package/RPC command path | actual Pi 0.84.4 PASS，`modelInvoked=false` |
+| Pi package/RPC command path | actual Pi 0.84.4 PASS，init/status/widget/banner；`modelInvoked=false` |
 | Pi child session construction seam | PASS，不调用 provider |
 | 当前主机真实 Bubblewrap Worker startup | EXPECTED_BLOCK（namespace policy） |
 | sandbox 内代表性依赖 build/test | NOT_PROVEN |
 | provider-backed Worker 完成真实任务 | NOT_PROVEN |
 | live streaming pause/steer timing | NOT_PROVEN |
-| interactive TUI visual acceptance | NOT_RUN |
+| interactive TUI component rendering | unit PASS（真实 `Container`/逐行 `Text`）；人工视觉验收 NOT_RUN |
 | one-off `--api-key` 继承到 child runtime | NOT_PROVEN |
 | 动态注册第三方 provider 继承 | NOT_PROVEN |
 
 ## 版本与 API 边界
 
 - Node.js：`>=22.19.0`；
-- 开发锁：`@earendil-works/pi-coding-agent@0.84.4`、`@earendil-works/pi-ai@0.84.4`、`typebox@1.3.7`；
+- 开发锁：`@earendil-works/pi-coding-agent@0.84.4`、`@earendil-works/pi-ai@0.84.4`、`@earendil-works/pi-tui@0.84.4`、`typebox@1.3.7`；
 - Pi 核心包在 runtime manifest 中使用 peer dependencies，避免把第二套 Pi runtime 打入扩展；
 - TypeBox 从 `typebox` 导入；Google-compatible enums 使用 Pi AI `StringEnum`；
 - 以本地锁定版本 typecheck/test 为准，不把未来 main 分支 API 假定为 0.84.4。
@@ -124,9 +129,10 @@ pnpm exec pi --version
 
 ```text
 pnpm typecheck: PASS
-pnpm test: PASS — 13 files / 75 tests
-pnpm smoke:rpc: PASS — Pi 0.84.4; init/status/widget PASS; modelInvoked=false
-pnpm pack:check: PASS — 34 entries; requiredFiles=PASS
+pnpm test: PASS — 16 files / 125 tests
+pnpm smoke:rpc: PASS — Pi 0.84.4; init/status/widget/banner PASS; modelInvoked=false
+pnpm pack:check: PASS — 72 entries; all source brand files present; requiredFiles/temporaryInstall/installedCli=PASS
+pi-intentum --help/--version: PASS from the installed tarball
 pnpm exec pi --version: 0.84.4
 ```
 

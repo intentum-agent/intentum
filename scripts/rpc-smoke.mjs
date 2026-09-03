@@ -43,6 +43,8 @@ try {
   const stderr = batches.map((batch) => batch.stderr).filter(Boolean).join("\n");
 
   const events = parseJsonLines(stdout);
+  const initEvents = parseJsonLines(batches[1].stdout);
+  const statusEvents = parseJsonLines(batches[2].stdout);
   const responses = new Map(
     events.filter((event) => event.type === "response" && event.id).map((event) => [event.id, event]),
   );
@@ -68,6 +70,22 @@ try {
 
   assert(events.some((event) => event.type === "extension_ui_request" && event.method === "setWidget"),
     "the extension did not publish its compact widget");
+  assert(
+    initEvents.some((event) => event.type === "extension_ui_request"
+      && event.method === "setWidget"
+      && event.widgetKey === "intentum-welcome"
+      && Array.isArray(event.widgetLines)
+      && event.widgetLines.length > 0),
+    "the init command did not publish a serializable one-time welcome banner",
+  );
+  assert(
+    !statusEvents.some((event) => event.type === "extension_ui_request"
+      && event.method === "setWidget"
+      && event.widgetKey === "intentum-welcome"
+      && Array.isArray(event.widgetLines)
+      && event.widgetLines.length > 0),
+    "the restored status command replayed the one-time welcome banner",
+  );
   assert(events.some((event) => event.type === "extension_ui_request" && event.method === "setStatus"),
     "the extension did not publish its status line");
   assert(events.some((event) => event.type === "extension_ui_request" && event.method === "notify"
@@ -91,6 +109,7 @@ try {
     init: "PASS",
     status: "PASS",
     widget: "PASS",
+    banner: "PASS",
     modelInvoked: false,
     fixture: process.env.INTENTUM_KEEP_SMOKE === "1" ? fixtureRepo : "removed",
   }, null, 2)}\n`);

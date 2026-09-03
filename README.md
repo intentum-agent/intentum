@@ -18,7 +18,8 @@ The implementation is a real **Phase 1 + single-Worker Phase 2 controller slice*
 - durable charter and architecture artifacts;
 - explicit project lifecycle transitions;
 - a bounded Designer system-context injection;
-- compact status widget and status line;
+- a one-time, responsive terminal welcome sourced from the shipped brand assets;
+- compact `⋗ intentum` status widget and status line;
 - command-only RPC loading and initialization without a provider request.
 
 ### Phase 2 — one strong Worker
@@ -76,6 +77,12 @@ Then initialize the target project:
 /intentum init My Product
 ```
 
+The first successful initialization renders the responsive terminal lockup once,
+adjacent to the editor rather than in the scrolling transcript. Running `/intentum`
+without arguments in an uninitialized repository shows the same one-time welcome.
+Session restore, status output, Worker cards, and later commands use only the compact
+`⋗ intentum` identity.
+
 The target repository must already have `HEAD`; Intentum refuses to create a Worker from an unborn branch. Project-local package resources should be reviewed before using `--approve`.
 
 ## Interaction model
@@ -105,6 +112,37 @@ Typical flow:
 | `/intentum worker-resume W-001 [message]` | Explicitly resume the preserved Worker or create a recovery session. |
 | `/intentum integrate W-001` | Verify and merge a completed Worker result. Guided mode asks for confirmation. |
 | `/intentum abort W-001 reason` | Explicit emergency abort; preserve session, branch, worktree, and files. |
+
+## Terminal brand and companion command
+
+Terminal artwork is loaded directly from [`brand/ascii`](./brand/ascii); neither the
+extension nor the companion command carries a second hand-drawn copy. The renderer
+measures the checked-in assets and selects a layout from `process.stdout.columns`:
+
+| Available columns | Layout |
+| --- | --- |
+| `>= 113` | `banner-big.txt` |
+| `58–112` | `banner-small.txt` |
+| `21–57` | `logo-small.txt` with a plain `intentum` label |
+| `12–20` | `logo-small.txt` without a wordmark |
+| `< 12` | compact `⋗ intentum`, clipped only when the terminal is narrower than the label |
+
+An unknown width is treated as 80 columns. Only the `o`/`@` Signal point cells are
+colored; the arms and wordmark keep the terminal's default foreground. Set
+`INTENTUM_ASCII_MARK=1` when the terminal font does not contain `⋗`; the compact mark
+then uses `>•`.
+
+`pi-intentum` is an informational companion command, not a second agent runtime. It
+loads no provider and supports only package help/version output:
+
+```bash
+pi-intentum --help
+pi-intentum --version
+```
+
+This checkout is still marked `private`; the command's npm registry installation
+line is a post-publication instruction, not evidence that a registry release exists.
+For current local development, load the checkout with Pi's `-e` option as shown above.
 
 ## Registered tools
 
@@ -175,11 +213,14 @@ That gate runs:
 ```text
 TypeScript strict typecheck
 Vitest unit and real-Git integration tests
-actual Pi package-directory RPC load/init/status smoke
-npm pack dry-run with required-file assertions
+actual Pi package-directory RPC load/init/status/widget/banner smoke
+real npm tarball creation, required-file assertions, offline temporary install,
+and execution of the installed `pi-intentum --help/--version` shim
 ```
 
 The RPC smoke uses a disposable Git repository, isolated Pi config directory, `PI_OFFLINE=1`, and `PI_TELEMETRY=0`. It verifies extension/package discovery, `/intentum init`, `/intentum status`, state/artifact creation, widget/status events, and the absence of an agent/model start.
+It also verifies that initialization emits serializable welcome lines and that the
+subsequent restored status session does not replay them.
 
 See [`docs/IMPLEMENTATION_STATUS.md`](./docs/IMPLEMENTATION_STATUS.md) for the current evidence boundary.
 

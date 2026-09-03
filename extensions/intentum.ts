@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { IntentumRuntime } from "../src/runtime/intentum-runtime.js";
-import { registerIntentumCommands } from "../src/tools/commands.js";
+import { clearIntentumWelcome, registerIntentumCommands } from "../src/tools/commands.js";
 import { registerDesignerTools } from "../src/tools/designer-tools.js";
 
 export default function intentumExtension(pi: ExtensionAPI): void {
@@ -14,6 +14,8 @@ export default function intentumExtension(pi: ExtensionAPI): void {
   registerDesignerTools(pi, requireRuntime);
 
   pi.on("session_start", async (_event, ctx) => {
+    // A restored/reloaded Pi session must never replay the one-time welcome frame.
+    clearIntentumWelcome(ctx.ui);
     if (runtime) await runtime.dispose();
     runtime = new IntentumRuntime(ctx.cwd);
     const recovery = await runtime.onSessionStart(ctx);
@@ -49,13 +51,16 @@ export default function intentumExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
+    // The welcome is a first frame, not permanent chrome or transcript content.
+    clearIntentumWelcome(ctx.ui);
     const runtime = requireRuntime();
     await runtime.assertContextRoot(ctx.cwd);
     const designerContext = await runtime.designerContext();
     return designerContext ? { systemPrompt: `${event.systemPrompt}\n\n${designerContext}` } : undefined;
   });
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, ctx) => {
+    clearIntentumWelcome(ctx.ui);
     const current = runtime;
     runtime = undefined;
     await current?.dispose();

@@ -15,6 +15,7 @@ import { PiWorkerRuntimeFactory } from "./pi-worker-runtime.js";
 import { WorkerManager, type NewWorkContract } from "../work/worker-manager.js";
 import type { WorkerRuntimeFactory } from "./worker-runtime.js";
 import { renderStatusText, renderStatusWidget } from "../tui/status-widget.js";
+import { intentumLabel } from "../tui/brand.js";
 import { acquireFileLease, type FileLease } from "../utils/file-lock.js";
 import { assertRepositoryOwnedPath, ensureRepositoryOwnedDirectory } from "../utils/safe-path.js";
 
@@ -351,7 +352,10 @@ ${JSON.stringify(decisions)}
       ["starting", "working", "pause_requested", "verifying"].includes(worker.status),
     ).length;
     try {
-      this.ui.setStatus("intentum", `${state.phase}${active ? ` · ${active} worker` : ""}`);
+      this.ui.setStatus(
+        "intentum",
+        `${intentumLabel()} · ${state.phase}${active ? ` · ${active} worker` : ""}`,
+      );
     } catch {
       // UI is an observer of canonical state, never a lifecycle gate.
     }

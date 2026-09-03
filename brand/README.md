@@ -60,8 +60,8 @@ and the wordmark independently or drop the wordmark on narrow terminals.
 | `ascii/text-big.txt` | 76 × 8 | Wordmark, figlet "Big Money" style in `$`. |
 | `ascii/banner-big.txt` | 113 × 18 | Mark + wordmark, wordmark vertically centred, 3-column gap. |
 | `ascii/logo-small.txt` | 12 × 6 | Mark. Arms in `#`, point in `o`. |
-| `ascii/text-small.txt` | 43 × 5 | Wordmark, figlet "Standard" style. |
-| `ascii/banner-small.txt` | 57 × 6 | Mark + wordmark, 2-column gap. |
+| `ascii/text-small.txt` | 44 × 5 | Wordmark, figlet "Standard" style. |
+| `ascii/banner-small.txt` | 58 × 6 | Mark + wordmark, 2-column gap. |
 
 Small banner:
 
@@ -106,9 +106,12 @@ Rules for the ASCII versions:
 
 - Use only in a monospace context: CLI banners, `--version`, the first frame of the TUI,
   READMEs rendered in code blocks. Never as an image.
-- Pick by `process.stdout.columns`: 113 or wider shows `banner-big`, 57 to 112 shows
-  `banner-small`, 12 to 56 shows `logo-small` with plain `intentum` to its right, and
-  below 12 falls back to `⋗ intentum`. When the width is unknown assume 80.
+- Pick by `process.stdout.columns`: 113 or wider shows `banner-big`, 58 to 112 shows
+  `banner-small`, 21 to 57 shows `logo-small` with plain `intentum` to its right,
+  12 to 20 shows the small mark without a wordmark, and below 12 falls back to
+  `⋗ intentum`. When the width is unknown assume 80. These boundaries match the
+  shipped files' measured maximum line widths, so selecting a layout never causes
+  avoidable terminal wrapping.
 - The files are plain 7-bit ASCII with trailing whitespace stripped and no ANSI codes.
   Colour is applied by the renderer, so the same file works on any terminal.
 - Do not restyle the wordmark in another figlet font and do not redraw the mark by hand.
