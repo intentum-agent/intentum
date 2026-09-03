@@ -63,7 +63,7 @@
 执行：
 
 ```bash
-cd /root/intentum
+cd /absolute/path/to/intentum
 pnpm check
 pnpm exec pi --version
 ```

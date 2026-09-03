@@ -192,7 +192,7 @@ The path is canonicalized and checked so a symlink cannot place it inside the ta
 
 ## Pause, abort, and recovery semantics
 
-- **Safe pause** sets the project scheduler to paused and calls `session.steer()` with a safe-boundary instruction. The Worker becomes `paused` only after `intentum_progress({ state: "paused" })`; that tool result terminates the current turn.
+- **Safe pause** sets the project scheduler to paused and calls `session.steer()` with a safe-boundary instruction. `intentum_progress({ state: "paused" })` records terminal pause intent; the Controller publishes `paused` only after that agent turn settles, so a mixed tool batch cannot finalize the state early.
 - **Steering** is written to a durable outbox before it is sent to Pi. Instructions included in a resumed prompt are acknowledged only after that turn settles; late live steering remains available for at-least-once recovery rather than being silently lost in Pi's queue/settled race.
 - **Emergency abort** first persists `interrupted`, then calls `session.abort()`. Late Worker callbacks cannot overwrite interrupted or terminal state.
 - **Process restart** reconciles a same-attempt durable terminal result when possible; otherwise it converts active recoverable records to `interrupted`, abandons unrecoverable reservations, reports preserved attention items, and deletes neither valid worktree nor session.
