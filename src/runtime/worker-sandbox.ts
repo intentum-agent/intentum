@@ -18,6 +18,7 @@ import { runFile } from "../utils/process.js";
 
 const execFileAsync = promisify(execFile);
 const TRUSTED_BWRAP_CANDIDATES = ["/usr/bin/bwrap", "/bin/bwrap"] as const;
+const MAX_SANDBOX_STDOUT_BYTES = 10 * 1024 * 1024;
 const SYSTEM_READ_ONLY_PATHS = [
   "/usr",
   "/bin",
@@ -57,9 +58,12 @@ export async function createWorkerSandboxTools(
   }
   const runtimeRoot = await realpath(runtimeMountRoot(process.execPath));
   assertSafeDynamicMount(root, runtimeRoot);
+  // Only the runtime's bin/ and lib/ are exposed. A prefix such as
+  // N_PREFIX=$HOME/.local also holds share/ (pnpm store, container auth) that
+  // the Worker must never read.
   const mountLayout = await existingMountLayout([
     ...SYSTEM_READ_ONLY_PATHS,
-    runtimeRoot,
+    ...RUNTIME_PREFIX_SUBDIRECTORIES.map((subdirectory) => join(runtimeRoot, subdirectory)),
   ]);
   const sandboxOptions: BubblewrapCommandOptions = {
     bwrap,
@@ -266,6 +270,7 @@ export async function runSandboxedCommand(
     });
     let stderr = "";
     const stdout: Buffer[] = [];
+    let stdoutBytes = 0;
     let stdinError: Error | undefined;
     let settled = false;
     let aborted = false;
@@ -302,7 +307,15 @@ export async function runSandboxedCommand(
     child.stderr.on("data", (chunk: string) => {
       if (stderr.length < 64 * 1024) stderr += chunk;
     });
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > MAX_SANDBOX_STDOUT_BYTES) {
+        stdinError ??= new Error(`sandboxed filesystem output exceeded ${MAX_SANDBOX_STDOUT_BYTES} bytes`);
+        child.kill("SIGKILL");
+        return;
+      }
+      stdout.push(chunk);
+    });
     child.once("error", (error) => {
       cleanup();
       rejectOnce(error);
@@ -467,10 +480,26 @@ async function findTrustedBubblewrap(): Promise<string | undefined> {
   return undefined;
 }
 
-function assertSafeDynamicMount(worktree: string, mount: string): void {
+const RUNTIME_PREFIX_SUBDIRECTORIES = ["bin", "lib"] as const;
+
+/**
+ * Version managers install Node at least three levels below $HOME
+ * (~/.nvm/versions/node/vX, ~/.asdf/installs/nodejs/X, ~/.volta/tools/image/node/X).
+ * A shallower prefix (~/.local, ~/node) is a general-purpose user directory.
+ */
+const MIN_HOME_RUNTIME_DEPTH = 3;
+
+export function assertSafeDynamicMount(worktree: string, mount: string): void {
   const candidate = resolve(mount);
-  if (candidate === "/" || candidate === resolve(homedir())) {
+  const home = resolve(homedir());
+  if (candidate === "/" || candidate === home) {
     throw new Error(`Worker sandbox refuses broad dynamic runtime mount: ${candidate}`);
+  }
+  if (isInside(home, candidate)) {
+    const depth = relative(home, candidate).split(sep).filter(Boolean).length;
+    if (depth < MIN_HOME_RUNTIME_DEPTH) {
+      throw new Error(`Worker sandbox refuses a runtime mount this close to the host home: ${candidate}`);
+    }
   }
   const sensitive = [
     worktree,

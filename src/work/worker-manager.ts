@@ -473,10 +473,12 @@ export class WorkerManager {
     if (!message.trim()) throw new Error("steering message must not be empty");
     const worker = this.requireWorker(await this.store.read(), workerId);
     this.assertLifecycleEpoch(lifecycleEpoch);
-    if (["pause_requested", "paused", "interrupted", "blocked", "verifying"].includes(worker.status)) {
+    // `verifying` is excluded: the Worker has already submitted its result
+    // and nothing re-prompts it, so a queued instruction could never be delivered.
+    if (["pause_requested", "paused", "interrupted", "blocked"].includes(worker.status)) {
       const updated = await this.updateWorker(workerId, (current) => {
         this.assertLifecycleEpoch(lifecycleEpoch);
-        if (!["pause_requested", "paused", "interrupted", "blocked", "verifying"].includes(current.status)) {
+        if (!["pause_requested", "paused", "interrupted", "blocked"].includes(current.status)) {
           throw new Error(`Worker ${workerId} cannot queue steering while ${current.status}`);
         }
         return {
@@ -923,6 +925,8 @@ export class WorkerManager {
     this.lifecycleAbortController.abort(new Error("Intentum Worker manager disposed"));
     const creates = [...this.createOperations];
     const integrations = [...this.integrationOperations];
+    const workerOperations = [...this.workerOperationTails.values()];
+    const aborts = [...this.abortOperations.values()];
     for (const operation of integrations) operation.controller.abort();
     this.createTail = Promise.resolve();
     this.workerOperationTails.clear();
@@ -931,7 +935,10 @@ export class WorkerManager {
       this.runtimeGenerations.set(workerId, generation + 1);
       this.bumpControlRevision(workerId);
     }
-    await Promise.allSettled(creates);
+    // Resume/steer/abort may be mid-way through constructing a Pi session;
+    // the controller lease must not be released while such a session can
+    // still come alive with write access to its worktree.
+    await Promise.allSettled([...creates, ...workerOperations, ...aborts]);
     await Promise.allSettled(integrations.map((operation) => operation.promise));
     const workerIds = [...this.runtimes.keys()];
     await Promise.all(workerIds.map((workerId) => this.disposeRuntime(workerId)));
@@ -1072,9 +1079,22 @@ export class WorkerManager {
         signal,
       );
       resultCommit = verified.head;
-      actualFiles = verified.files;
+      // The stored result is re-validated against the same caps as model
+      // input, but these two fields are controller-derived: bound them here
+      // so a legitimately committed completion is never rejected for the
+      // controller's own diff size or its own appended note.
+      actualFiles = boundedFileList(verified.files, MAX_RESULT_FILES);
       if (JSON.stringify([...input.filesChanged].sort()) !== JSON.stringify([...verified.files].sort())) {
-        remainingRisks.push("Worker-reported filesChanged differed from the controller's Git diff; Git-derived paths were stored.");
+        pushBoundedRisk(
+          remainingRisks,
+          "Worker-reported filesChanged differed from the controller's Git diff; Git-derived paths were stored.",
+        );
+      }
+      if (verified.files.length > MAX_RESULT_FILES) {
+        pushBoundedRisk(
+          remainingRisks,
+          `Git diff touched ${verified.files.length} files; only the first ${MAX_RESULT_FILES} were stored in filesChanged.`,
+        );
       }
     }
 
@@ -1141,8 +1161,17 @@ export class WorkerManager {
     previous?.unsubscribe();
     if (previous && previous.runtime !== runtime) await previous.runtime.dispose();
     const managed: ManagedRuntime = { runtime, unsubscribe: () => undefined, generation, turn: 0 };
+    // Pi emits session_ref_changed on every message_end; only the first
+    // sighting of a ref needs a locked state.json rewrite.
+    let recordedSessionRef: string | undefined;
     const unsubscribe = runtime.subscribe((event) => {
-      if (event.type === "session_ref_changed" && event.sessionRef && this.isCurrentGeneration(workerId, generation)) {
+      if (
+        event.type === "session_ref_changed"
+        && event.sessionRef
+        && event.sessionRef !== recordedSessionRef
+        && this.isCurrentGeneration(workerId, generation)
+      ) {
+        recordedSessionRef = event.sessionRef;
         void this.updateWorker(workerId, (current) => {
           this.assertCurrentGeneration(workerId, generation);
           return { ...current, sessionRef: event.sessionRef };
@@ -1709,6 +1738,19 @@ function contextExcerpt(value: string): string {
   return normalized.length <= 1_500
     ? normalized
     : `${normalized.slice(0, 1_500).trimEnd()}\n[…truncated by Controller]`;
+}
+
+const MAX_RESULT_FILES = 1_000;
+const MAX_RESULT_RISKS = 100;
+
+function boundedFileList(files: readonly string[], limit: number): string[] {
+  return files.slice(0, limit).map((file) => (file.length > 1_000 ? `${file.slice(0, 997)}...` : file));
+}
+
+/** Append a controller note, displacing the last model-supplied entry when the cap is already reached. */
+function pushBoundedRisk(risks: string[], note: string): void {
+  if (risks.length >= MAX_RESULT_RISKS) risks.length = MAX_RESULT_RISKS - 1;
+  risks.push(note);
 }
 
 function isUnfinishedWorker(status: WorkerRecord["status"]): boolean {

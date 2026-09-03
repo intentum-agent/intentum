@@ -10,34 +10,34 @@ const CHARTER_TEMPLATE = `# Product Charter
 
 ## Target users
 
-【To be established with the user】
+[To be established with the user]
 
 ## Primary outcome
 
-【To be established with the user】
+[To be established with the user]
 
 ## Success criteria
 
-【To be established with the user】
+[To be established with the user]
 
 ## Non-goals
 
-【To be established with the user】
+[To be established with the user]
 `;
 
 const ARCHITECTURE_TEMPLATE = `# Current Approved Architecture Direction
 
 ## Context
 
-【To be established during discovery】
+[To be established during discovery]
 
 ## Direction
 
-【Not approved yet】
+[Not approved yet]
 
 ## Constraints and trade-offs
 
-【To be established during discovery】
+[To be established during discovery]
 `;
 
 export type ProjectArtifact = "charter" | "architecture";

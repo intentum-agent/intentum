@@ -49,7 +49,7 @@ export class PiWorkerRuntimeFactory implements WorkerRuntimeFactory {
     thinkingLevel?: CreateAgentSessionOptions["thinkingLevel"];
     projectTrusted?: boolean;
   }): void {
-    this.defaults = { ...defaults };
+    this.defaults = { ...this.defaults, ...defaults };
   }
 
   async create(input: CreateWorkerRuntimeInput): Promise<WorkerRuntime> {

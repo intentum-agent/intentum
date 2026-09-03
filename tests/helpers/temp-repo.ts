@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runFile } from "../../src/utils/process.js";
@@ -11,7 +11,9 @@ export interface TempRepository {
 }
 
 export async function createTempRepository(): Promise<TempRepository> {
-  const root = await mkdtemp(join(tmpdir(), "intentum-test-"));
+  // macOS places tmpdir under a symlinked prefix (/var -> /private/var);
+  // canonicalize so path assertions against realpath()ed values hold.
+  const root = await realpath(await mkdtemp(join(tmpdir(), "intentum-test-")));
   const repo = join(root, "repo");
   const cache = join(root, "cache");
   await Promise.all([mkdir(repo), mkdir(cache)]);

@@ -45,6 +45,38 @@ describe("intentum extension registration", () => {
     expect(events).toEqual(["session_start", "before_agent_start", "session_shutdown"]);
   });
 
+  it("keeps an established project trust decision when a context has no trust probe", async () => {
+    const fixture = await createTempRepository();
+    const runtime = new IntentumRuntime(fixture.repo, {
+      cacheRoot: fixture.cache,
+      workerRuntimeFactory: new ScriptedWorkerFactory(),
+      projectTrusted: true,
+    });
+    try {
+      await runtime.initialize("Trust Probe");
+      runtime.setWorkerSessionDefaults({ model: undefined, thinkingLevel: undefined } as never);
+      await expect(runtime.createWork({
+        featureId: "F-001",
+        title: "Trust survives re-application of session defaults",
+        objective: "Create a Worker after defaults were re-applied from a probe-less context.",
+        why: "Command and tool contexts re-apply defaults mid-session.",
+        userVisibleResult: "A Worker record exists.",
+        scope: { inScope: ["greeting.txt"], outOfScope: [] },
+        interfaces: [],
+        constraints: [],
+        acceptanceCriteria: ["Worker starts"],
+        dependencies: [],
+        touchHints: ["greeting.txt"],
+        risk: "low",
+        preferredWorkerKind: "implementation",
+        contextFiles: ["README.md"],
+      })).resolves.toMatchObject({ id: "W-001" });
+    } finally {
+      await runtime.dispose();
+      await fixture.cleanup();
+    }
+  });
+
   it("parses quoted command arguments without invoking a shell", () => {
     expect(splitArguments("steer W-001 \"keep the name stable\"")).toEqual([
       "steer",

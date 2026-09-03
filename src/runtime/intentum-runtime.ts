@@ -114,7 +114,10 @@ export class IntentumRuntime {
     } = {};
     if (ctx.model) defaults.model = ctx.model;
     if (ctx.thinkingLevel) defaults.thinkingLevel = ctx.thinkingLevel;
-    defaults.projectTrusted = typeof ctx.isProjectTrusted === "function" ? ctx.isProjectTrusted() : false;
+    // Contexts without a trust probe leave the previously recorded decision
+    // in place; this is called again from command and tool contexts, so a
+    // missing probe must never downgrade a project the user already trusted.
+    if (typeof ctx.isProjectTrusted === "function") defaults.projectTrusted = ctx.isProjectTrusted();
     this.workers.setSessionDefaults(defaults);
   }
 
@@ -302,7 +305,23 @@ ${JSON.stringify(decisions)}
 
   private async ensureControllerLease(): Promise<void> {
     if (this.disposed) throw new Error("intentum runtime is disposed; wait for a new session_start before using it");
-    if (this.controllerLease) return;
+    if (this.controllerLease) {
+      // The lease is only a directory; if it was removed out from under us
+      // (rm -rf .intentum, git clean -x) another controller can now own the
+      // repository, so stop mutating instead of trusting the cached handle.
+      try {
+        await this.controllerLease.assertHeld();
+        return;
+      } catch (error) {
+        const lost = this.controllerLease;
+        this.controllerLease = undefined;
+        await lost.release().catch(() => undefined);
+        throw new Error(
+          "this session lost the Intentum controller lease (.intentum/controller.lease was removed); restart the session before mutating the repository",
+          { cause: error },
+        );
+      }
+    }
     if (!this.controllerLeasePromise) {
       const lifecycleEpoch = this.lifecycleEpoch;
       this.controllerLeasePromise = (async () => {

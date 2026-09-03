@@ -1,8 +1,10 @@
-import { access, chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { homedir } from "node:os";
 import {
+  assertSafeDynamicMount,
   assertWorkerMutablePath,
   buildBubblewrapCommand,
   createWorkerGitSnapshotTool,
@@ -42,8 +44,18 @@ describe("Worker sandbox boundary", () => {
     })).toThrow("refuses to mount the host filesystem root");
   });
 
+  it("refuses runtime mounts that would expose a shallow home subtree", () => {
+    const home = homedir();
+    expect(() => assertSafeDynamicMount("/work", home)).toThrow("broad dynamic runtime mount");
+    expect(() => assertSafeDynamicMount("/work", join(home, ".local"))).toThrow("close to the host home");
+    expect(() => assertSafeDynamicMount("/work", join(home, "node"))).toThrow("close to the host home");
+    expect(() => assertSafeDynamicMount("/work", join(home, ".nvm", "versions", "node", "v22.19.0"))).not.toThrow();
+    expect(() => assertSafeDynamicMount("/work", "/opt/homebrew/Cellar/node/26.7.0")).not.toThrow();
+    expect(() => assertSafeDynamicMount("/work", join(home, ".ssh", "nested", "runtime", "v1"))).toThrow("protected host path");
+  });
+
   it("rejects controller paths, lexical escapes, and dangling symlink writes", async () => {
-    const root = await mkdtemp(join(tmpdir(), "intentum-sandbox-"));
+    const root = await realpath(await mkdtemp(join(tmpdir(), "intentum-sandbox-")));
     const worktree = join(root, "worktree");
     const outside = join(root, "outside");
     const outsideTarget = join(outside, "created.txt");

@@ -135,13 +135,15 @@ export class WorktreeManager {
     const head = await this.headAt(managedPath, signal);
     if (head === baseCommit) throw new Error("worker completed without creating a result commit");
     await runFile("git", ["merge-base", "--is-ancestor", baseCommit, head], managedPath, { signal });
+    // -z keeps non-ASCII names literal; the default core.quotePath C-quoting
+    // would let ".intentum/<non-ascii>" slip past the prefix check below.
     const files = (await runFile(
       "git",
-      ["diff", "--name-only", `${baseCommit}..${head}`],
+      ["diff", "-z", "--name-only", `${baseCommit}..${head}`],
       managedPath,
       { signal },
     )).stdout
-      .split("\n")
+      .split("\0")
       .filter(Boolean);
     if (files.length === 0) throw new Error("worker result commit does not change any files");
     if (files.some((file) => file === ".intentum" || file.startsWith(".intentum/"))) {
@@ -238,8 +240,8 @@ export class WorktreeManager {
     if (!status) throw new Error("Worker worktree has no changes to commit");
 
     await runFile("git", ["add", "-A", "--", "."], managedPath, { signal });
-    const files = (await runFile("git", ["diff", "--cached", "--name-only"], managedPath, { signal })).stdout
-      .split("\n")
+    const files = (await runFile("git", ["diff", "-z", "--cached", "--name-only"], managedPath, { signal })).stdout
+      .split("\0")
       .filter(Boolean);
     if (files.length === 0) throw new Error("Worker worktree has no staged changes to commit");
     if (files.some((file) => file === ".intentum" || file.startsWith(".intentum/"))) {

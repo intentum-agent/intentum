@@ -78,8 +78,8 @@ export class IntegrationManager {
         );
       });
     const changedFiles = (await git(
-      ["diff", "--name-only", `${request.expectedBaseCommit}..${request.resultCommit}`],
-    )).stdout.split("\n").filter(Boolean);
+      ["diff", "-z", "--name-only", `${request.expectedBaseCommit}..${request.resultCommit}`],
+    )).stdout.split("\0").filter(Boolean);
     if (changedFiles.some((file) => file === ".intentum" || file.startsWith(".intentum/"))) {
       throw new Error("integration result modifies controller-owned .intentum state");
     }

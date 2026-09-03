@@ -55,7 +55,16 @@ export default function intentumExtension(pi: ExtensionAPI): void {
     clearIntentumWelcome(ctx.ui);
     const runtime = requireRuntime();
     await runtime.assertContextRoot(ctx.cwd);
-    const designerContext = await runtime.designerContext();
+    let designerContext: string | undefined;
+    try {
+      designerContext = await runtime.designerContext();
+    } catch (error) {
+      // A lost lease or unreadable state must not make every Designer turn
+      // fail; the Designer can still run and the next command reports it.
+      const message = error instanceof Error ? error.message : String(error);
+      ctx.ui.notify(`intentum could not load its Designer context: ${message}`, "warning");
+      return undefined;
+    }
     return designerContext ? { systemPrompt: `${event.systemPrompt}\n\n${designerContext}` } : undefined;
   });
 

@@ -254,7 +254,9 @@ function sliceToColumns(value: string, columns: number): string {
 }
 
 async function loadAsciiAsset(fileName: string): Promise<readonly string[]> {
-  const raw = await readFile(new URL(fileName, BRAND_ASCII_DIRECTORY), "ascii");
+  // "utf8" rather than "ascii": Node's ascii decoder masks bit 7, which would
+  // make the 7-bit check below unreachable.
+  const raw = await readFile(new URL(fileName, BRAND_ASCII_DIRECTORY), "utf8");
   if (raw.includes("\r")) throw new Error(`Brand asset ${fileName} must use LF line endings`);
   if (raw.includes("\u001b")) throw new Error(`Brand asset ${fileName} must not contain ANSI escapes`);
   if ([...raw].some((character) => character.charCodeAt(0) > 0x7f)) {
