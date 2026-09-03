@@ -1978,7 +1978,55 @@ intentum 只添加：
 
 ------
 
-## 15.2 Focus View
+## 15.2 Banner 与 Logo
+
+intentum 的终端 logo 来自 `brand/ascii/`，两种尺寸，每种拆成 mark（`logo-*.txt`）、wordmark（`text-*.txt`）和合并后的 lockup（`banner-*.txt`）。规格与颜色规则见 `brand/README.md`，不要手绘或换字体。
+
+小号 lockup（`banner-small.txt`，57 列 × 6 行）：
+
+```text
+####            _       _             _
+#######        (_)_ __ | |_ ___ _ __ | |_ _   _ _ __ ___
+    #####ooo   | | '_ \| __/ _ \ '_ \| __| | | | '_ ` _ \
+    #####ooo   | | | | | ||  __/ | | | |_| |_| | | | | | |
+#######        |_|_| |_|\__\___|_| |_|\__|\__,_|_| |_| |_|
+####
+```
+
+大号 lockup（`banner-big.txt`）为 113 列 × 18 行，mark 用 `#`，point 用 `@`。
+
+mark 中的 `o`（小号）/ `@`（大号）是 point，用 Signal red（ANSI 31，truecolor 下 `#E8302A` / 暗底 `#FF5148`）渲染；其余全部用默认前景色。wordmark 永远不上色。一个 logo 只有一个红点。
+
+使用场景：
+
+1. `/intentum init` 建立新项目后的第一帧；
+2. `/intentum` 无参数、且项目尚未初始化时的欢迎页；
+3. `pi-intentum --version` 和 `--help`。
+
+不使用的场景：
+
+- 每次 session 恢复时；
+- status widget、footer、decision card、checkpoint card 内；
+- 任何会随 transcript 滚动的地方。
+
+banner 只出现一次，之后界面只用 `⋗`（U+22D7）作为 intentum 的标识，例如 `⋗ intentum · my-app`。字体缺少该字形时用 `>•`。
+
+响应宽度：
+
+| 终端宽度 | 显示 |
+| --- | --- |
+| ≥ 113 列 | `banner-big.txt` |
+| 57–112 列 | `banner-small.txt` |
+| 12–56 列 | `logo-small.txt` + 同一行右侧的 `intentum`（纯文本） |
+| < 12 列 | 只显示 `⋗ intentum` |
+
+检测方式是 `process.stdout.columns`；无法检测时按 80 列处理，即显示小号 lockup。
+
+实现时直接读取 `brand/ascii/` 下的文件，用 Pi TUI 的 `Text` 组件按行渲染，point 字符用主题的 error/danger 色或直接 ANSI 31 上色。不要把 logo 硬编码进多个文件。
+
+------
+
+## 15.3 Focus View
 
 默认界面：
 
@@ -2008,7 +2056,7 @@ intentum 只添加：
 
 ------
 
-## 15.3 信息优先级
+## 15.4 信息优先级
 
 ```text
 需要用户决定
@@ -2030,7 +2078,7 @@ Worker 活动摘要
 
 ------
 
-## 15.4 三种信息密度
+## 15.5 三种信息密度
 
 ### Focus
 
@@ -2076,7 +2124,7 @@ Worker 活动摘要
 
 ------
 
-## 15.5 Worker Panel
+## 15.6 Worker Panel
 
 ```text
 WORKERS
@@ -2107,7 +2155,7 @@ Blocker: needs decision D-004.
 
 ------
 
-## 15.6 Decision Card
+## 15.7 Decision Card
 
 一次只显示一个 blocking decision：
 
@@ -2135,7 +2183,7 @@ W-002, W-004
 
 ------
 
-## 15.7 Checkpoint Card
+## 15.8 Checkpoint Card
 
 ```text
 CHECKPOINT C-004
@@ -2167,7 +2215,7 @@ Modified 27 files.
 
 ------
 
-## 15.8 自然语言优先
+## 15.9 自然语言优先
 
 用户应该可以直接输入：
 
