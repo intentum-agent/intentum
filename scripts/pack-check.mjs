@@ -61,6 +61,7 @@ try {
     "README.md",
     "LICENSE",
     "intentum.md",
+    "bin/intentum.mjs",
     "bin/pi-intentum.mjs",
     "brand/README.md",
     "brand/intentum-logo.svg",
@@ -99,7 +100,8 @@ try {
     60_000,
   );
 
-  const installedBin = join(installRoot, "node_modules", ".bin", "pi-intentum");
+  const installedBin = join(installRoot, "node_modules", ".bin", "intentum");
+  const installedCompanionBin = join(installRoot, "node_modules", ".bin", "pi-intentum");
   const installedPackage = JSON.parse(await readFile(
     join(installRoot, "node_modules", "pi-intentum", "package.json"),
     "utf8",
@@ -112,6 +114,8 @@ try {
   const versionStderrPath = join(scratch, "version.stderr.log");
   const helpStdoutPath = join(scratch, "help.stdout.log");
   const helpStderrPath = join(scratch, "help.stderr.log");
+  const companionStdoutPath = join(scratch, "companion.stdout.log");
+  const companionStderrPath = join(scratch, "companion.stderr.log");
   await Promise.all([
     runRedirected('"$1" --version > "$2" 2> "$3"', [
       installedBin,
@@ -123,13 +127,25 @@ try {
       helpStdoutPath,
       helpStderrPath,
     ], installRoot, 10_000, { NO_COLOR: "1" }),
+    runRedirected('"$1" --version > "$2" 2> "$3"', [
+      installedCompanionBin,
+      companionStdoutPath,
+      companionStderrPath,
+    ], installRoot, 10_000, { NO_COLOR: "1" }),
   ]);
-  const [versionStdout, helpStdout] = await Promise.all([
+  const [versionStdout, helpStdout, companionStdout] = await Promise.all([
     readFile(versionStdoutPath, "utf8"),
     readFile(helpStdoutPath, "utf8"),
+    readFile(companionStdoutPath, "utf8"),
   ]);
-  if (!versionStdout.includes(`pi-intentum v${pack.version}`)) {
+  if (!versionStdout.includes(`intentum v${pack.version}`)) {
+    throw new Error("installed intentum --version did not report the package version");
+  }
+  if (!companionStdout.includes(`intentum v${pack.version}`)) {
     throw new Error("installed pi-intentum --version did not report the package version");
+  }
+  if (!helpStdout.includes("intentum init [name]")) {
+    throw new Error("installed intentum --help did not describe the launcher commands");
   }
   if (!versionStdout.startsWith("####            _") || !helpStdout.includes("Usage:")) {
     throw new Error("installed CLI did not load the packaged 80-column brand/help output");

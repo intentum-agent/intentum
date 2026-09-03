@@ -53,7 +53,64 @@ Pi owns model/provider authentication and session transcripts. Intentum stores o
 
 Worker startup is deliberately fail-closed. It does not fall back to unrestricted host `bash`, `edit`, or `write` if Bubblewrap is missing or namespace creation is denied. The current sandbox has no network and does not mount the host home, package-manager stores, the target repository, or the shared Git common directory. Consequently, projects whose dependencies exist only in ignored `node_modules`, a virtualenv, Cargo/Go caches, or a remote registry need a future dependency-provisioning layer before their build can run inside the Worker. This limitation is reported as a live-runtime block, not hidden by the scripted test harness.
 
-## Local development usage
+## Install
+
+Intentum runs inside [Pi](https://github.com/earendil-works/pi-coding-agent). Install Pi first if you have not:
+
+```bash
+npm install -g @earendil-works/pi-coding-agent
+```
+
+Then install Intentum as a Pi package. Pi loads it automatically in every session:
+
+```bash
+pi install npm:pi-intentum
+```
+
+Or install it globally to get the `intentum` command:
+
+```bash
+npm install -g pi-intentum
+```
+
+Both lines are post-publication instructions. The package is still marked `private` and
+has not been published, so for now use the local checkout described under
+[Development checkout](#development-checkout).
+
+## Getting started
+
+Run everything from the root of the Git repository you want Intentum to manage. It
+needs at least one commit on a named branch.
+
+```bash
+cd /path/to/your-repo
+intentum doctor            # check Node, Git, Pi, and the Worker sandbox
+intentum init My Product   # open Pi and initialize the project
+```
+
+`intentum init` opens Pi with Intentum loaded and runs `/intentum init` for you. From
+there the Designer conversation takes over. Later sessions just need:
+
+```bash
+intentum                   # open Pi with Intentum loaded
+intentum status            # print the project phase and Workers without starting Pi
+intentum --model sonnet    # anything else is passed straight to pi
+```
+
+If you installed Intentum only as a Pi package, the same commands are available inside
+Pi as `/intentum init`, `/intentum status`, and so on.
+
+The `intentum` command is a thin launcher. It finds `pi` on your `PATH` (or the Pi
+package this package resolves against, or `$INTENTUM_PI`), adds `-e <package>` unless
+Pi's settings already register Intentum, and hands the terminal to Pi. It never talks
+to a model itself. Pi owns model/provider authentication and session transcripts;
+Intentum stores only the Pi session reference and does not copy transcripts into `.intentum/`.
+
+`intentum doctor` reports what will and will not work on this machine. On macOS it
+warns that Workers cannot start because the sandbox requires Linux with Bubblewrap.
+Designer conversation, `init`, charter, and architecture work everywhere.
+
+## Development checkout
 
 Install the locked development dependencies:
 
@@ -62,20 +119,21 @@ cd /absolute/path/to/intentum
 pnpm install
 ```
 
-Start Pi from the repository you want Intentum to manage, loading this checkout as a temporary local package:
+Run the launcher straight from the checkout:
 
 ```bash
 cd /absolute/path/to/target-repository
-/absolute/path/to/intentum/node_modules/.bin/pi \
-  --approve \
-  -e /absolute/path/to/intentum
+node /absolute/path/to/intentum/bin/intentum.mjs init My Product
 ```
 
-Then initialize the target project:
+Or load the checkout into Pi by hand, which is what the launcher does for you:
 
-```text
-/intentum init My Product
+```bash
+cd /absolute/path/to/target-repository
+pi -e /absolute/path/to/intentum
 ```
+
+Then type `/intentum init My Product` inside Pi.
 
 The first successful initialization renders the responsive terminal lockup once,
 adjacent to the editor rather than in the scrolling transcript. Running `/intentum`
@@ -83,7 +141,7 @@ without arguments in an uninitialized repository shows the same one-time welcome
 Session restore, status output, Worker cards, and later commands use only the compact
 `⋗ intentum` identity.
 
-The target repository must already have `HEAD`; Intentum refuses to create a Worker from an unborn branch. Project-local package resources should be reviewed before using `--approve`.
+The target repository must already have `HEAD`; Intentum refuses to create a Worker from an unborn branch. Review project-local package resources before trusting a project in Pi.
 
 ## Interaction model
 
@@ -91,7 +149,7 @@ Normal conversation remains the primary interface. The Designer reflects the use
 
 Typical flow:
 
-1. Run `/intentum init`.
+1. Run `intentum init [name]`, or `/intentum init` inside Pi.
 2. Establish the charter and approved architecture direction through Designer conversation.
 3. The Designer submits one broad `intentum_create_work` contract.
 4. The controller creates `intentum/F-001/W-001` in an external worktree.
@@ -116,7 +174,7 @@ Typical flow:
 ## Terminal brand and companion command
 
 Terminal artwork is loaded directly from [`brand/ascii`](./brand/ascii); neither the
-extension nor the companion command carries a second hand-drawn copy. The renderer
+extension nor the launcher carries a second hand-drawn copy. The renderer
 measures the checked-in assets and selects a layout from `process.stdout.columns`:
 
 | Available columns | Layout |
@@ -132,17 +190,8 @@ colored; the arms and wordmark keep the terminal's default foreground. Set
 `INTENTUM_ASCII_MARK=1` when the terminal font does not contain `⋗`; the compact mark
 then uses `>•`.
 
-`pi-intentum` is an informational companion command, not a second agent runtime. It
-loads no provider and supports only package help/version output:
-
-```bash
-pi-intentum --help
-pi-intentum --version
-```
-
-This checkout is still marked `private`; the command's npm registry installation
-line is a post-publication instruction, not evidence that a registry release exists.
-For current local development, load the checkout with Pi's `-e` option as shown above.
+`intentum --help` and `intentum --version` show the lockup. `pi-intentum` is the
+historical companion name and runs the same executable.
 
 ## Registered tools
 
@@ -215,7 +264,7 @@ TypeScript strict typecheck
 Vitest unit and real-Git integration tests
 actual Pi package-directory RPC load/init/status/widget/banner smoke
 real npm tarball creation, required-file assertions, offline temporary install,
-and execution of the installed `pi-intentum --help/--version` shim
+and execution of the installed `intentum` and `pi-intentum` shims
 ```
 
 The RPC smoke uses a disposable Git repository, isolated Pi config directory, `PI_OFFLINE=1`, and `PI_TELEMETRY=0`. It verifies extension/package discovery, `/intentum init`, `/intentum status`, state/artifact creation, widget/status events, and the absence of an agent/model start.

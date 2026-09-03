@@ -22,12 +22,12 @@
 3. 按终端宽度选择 big/small/logo-only/`⋗ intentum` fallback；
 4. 只给 mark point 使用 Signal red，wordmark 保持默认前景色；
 5. status widget 的 `⋗ intentum` 标识；
-6. `pi-intentum --help`、`pi-intentum --version` CLI 入口；
+6. `intentum` 启动器（`init`/`status`/`doctor`/透传 Pi 参数）以及 `--help`/`--version`；`pi-intentum` 为同一可执行文件的历史别名；
 7. 将 `brand/` 纳入 npm `files` 和 pack manifest，并增加资产、宽度、一次性显示和 RPC 回归测试。
 
 实现时还发现远端文档的宽度数据与已提交资产相差一列：`text-small.txt` 实测最大 44 列，`banner-small.txt` 实测最大 58 列。文档与选择边界已同步为 58 列起用 small banner；21–57 列使用 compact mark + wordmark；12–20 列保留 small mark。这样所有已选择的原始行都不超过可用列数。
 
-因此，远端更新前的 Phase 1/2 Controller 门禁与新增品牌/TUI delta 均已进入当前工作树门禁。`pi-intentum` 只是 help/version companion，不建立第二套 agent runtime，也不调用 provider。
+因此，远端更新前的 Phase 1/2 Controller 门禁与新增品牌/TUI delta 均已进入当前工作树门禁。`intentum` 只是一个启动器：定位 `pi`、在 Pi settings 未注册本包时追加 `-e <package>`、把 `intentum init <name>` 转成初始 `/intentum init` 命令；它不建立第二套 agent runtime，也不调用 provider。
 
 ## 已实现的核心路径
 
@@ -44,7 +44,7 @@
 11. Controller 从 Git 独立取得 result commit/changed files，并复验 worktree registration、common-dir、branch、base ancestry、cleanliness 与 protected paths。
 12. 显式 `--no-ff` merge；target branch/base/head/Git-operation 前置校验；真实冲突自动 abort；幂等 crash reconciliation；integration 在 runtime dispose 前被 cancel/drain。
 13. 从 `brand/ascii/` 读取的响应式、一次性欢迎 Banner；Pi TUI 每行 `Text` 渲染；Signal point 精确着色；RPC 使用可序列化行且 restore 不重放。
-14. `pi-intentum --help/--version` companion、品牌资源发布白名单、真实 tarball 离线安装与已安装 bin 执行门禁。
+14. `intentum` 启动器（launch/init/status/doctor，见 `tests/cli-launcher.test.ts`）、`--help/--version`、品牌资源发布白名单、真实 tarball 离线安装与已安装 `intentum`/`pi-intentum` bin 执行门禁。
 
 ## 关键不变量
 
@@ -132,7 +132,7 @@ pnpm typecheck: PASS
 pnpm test: PASS — 16 files / 125 tests
 pnpm smoke:rpc: PASS — Pi 0.84.4; init/status/widget/banner PASS; modelInvoked=false
 pnpm pack:check: PASS — 72 entries; all source brand files present; requiredFiles/temporaryInstall/installedCli=PASS
-pi-intentum --help/--version: PASS from the installed tarball
+intentum --help/--version and pi-intentum --version: PASS from the installed tarball
 pnpm exec pi --version: 0.84.4
 ```
 

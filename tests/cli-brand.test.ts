@@ -6,7 +6,7 @@ import { renderBrandLines } from "../src/tui/brand.js";
 // The executable intentionally ships as plain ESM so Node can run it directly
 // from an npm bin shim without a build step.
 // @ts-expect-error the shipped .mjs executable has no separate declaration file
-import { renderBrand, runCli } from "../bin/pi-intentum.mjs";
+import { renderBrand, runCli } from "../bin/intentum.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const ansiPattern = /\u001b\[[0-9;]*m/g;
@@ -41,7 +41,7 @@ function visible(line: string): string {
   return line.replace(ansiPattern, "");
 }
 
-describe("pi-intentum terminal brand", () => {
+describe("intentum terminal brand", () => {
   it("stays byte-for-byte aligned with the Pi TUI renderer at every layout boundary", async () => {
     for (const columns of [113, 112, 58, 57, 21, 20, 12, 11, 9]) {
       await expect(renderAt(columns)).resolves.toEqual(
@@ -108,7 +108,7 @@ describe("pi-intentum terminal brand", () => {
   });
 });
 
-describe("pi-intentum companion CLI", () => {
+describe("intentum CLI help and version", () => {
   it("prints branded help without creating project state or starting a provider", async () => {
     const stdout = captureStream();
     const stderr = captureStream();
@@ -124,6 +124,8 @@ describe("pi-intentum companion CLI", () => {
     expect(stdout.output).toContain("####            _");
     expect(stdout.output).toContain("Usage:");
     expect(stdout.output).toContain("pi install npm:pi-intentum");
+    expect(stdout.output).toContain("intentum init [name]");
+    expect(stdout.output).toContain("intentum doctor");
     expect(existsSync(statePath)).toBe(stateExistedBefore);
   });
 
@@ -140,18 +142,6 @@ describe("pi-intentum companion CLI", () => {
     })).resolves.toBe(0);
     expect(stderr.output).toBe("");
     expect(stdout.output).toContain("####            _");
-    expect(stdout.output).toContain(`pi-intentum v${packageJson.version}`);
-  });
-
-  it("reports unknown options on stderr with a failing exit status", async () => {
-    const stdout = captureStream();
-    const stderr = captureStream();
-    await expect(runCli(["--wat"], {
-      stdout,
-      stderr,
-      env: { NO_COLOR: "1" },
-    })).resolves.toBe(1);
-    expect(stdout.output).toBe("");
-    expect(stderr.output).toContain("Unknown option: --wat");
+    expect(stdout.output).toContain(`intentum v${packageJson.version}`);
   });
 });

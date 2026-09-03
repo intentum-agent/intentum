@@ -24,6 +24,7 @@
     "product-development"
   ],
   "bin": {
+    "intentum": "./bin/intentum.mjs",
     "pi-intentum": "./bin/pi-intentum.mjs"
   },
   "files": [
