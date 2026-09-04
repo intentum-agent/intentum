@@ -16,6 +16,9 @@ import { formatCwd, MAX_RECENT_SESSIONS, type RecentSession, renderWelcomeCard, 
  * Session chrome: the startup welcome card and the one-line footer that
  * replace Pi's built-in ones inside an intentum session. Everything here is
  * pure rendering; canonical state stays in the runtime.
+ *
+ * The footer is derived from Oh My Pi's status line (MIT); see
+ * THIRD_PARTY_NOTICES.md at the package root.
  */
 
 /** The footer keeps one empty cell on each edge, like the editor border above it. */

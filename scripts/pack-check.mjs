@@ -69,6 +69,7 @@ try {
     "package.json",
     "README.md",
     "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
     "intentum.md",
     "bin/intentum.mjs",
     "bin/pi-intentum.mjs",

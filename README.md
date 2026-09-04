@@ -391,4 +391,6 @@ Those remain explicit live/manual gates rather than being represented by fake cr
 
 ## License
 
-MIT
+MIT. The session status line is derived from [Oh My Pi](https://github.com/can1357/oh-my-pi)
+(MIT, © Mario Zechner, Can Bölük, Stencil Labs, Inc.); its notice is reproduced in
+[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
