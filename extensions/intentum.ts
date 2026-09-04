@@ -2,9 +2,11 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { IntentumRuntime } from "../src/runtime/intentum-runtime.js";
 import { clearIntentumWelcome, registerIntentumCommands } from "../src/tools/commands.js";
 import { registerDesignerTools } from "../src/tools/designer-tools.js";
+import { installSessionChrome } from "../src/tui/session-chrome.js";
 
 export default function intentumExtension(pi: ExtensionAPI): void {
   let runtime: IntentumRuntime | undefined;
+  let disposeChrome: (() => void) | undefined;
   const requireRuntime = () => {
     if (!runtime) throw new Error("intentum session has not started yet");
     return runtime;
@@ -16,9 +18,12 @@ export default function intentumExtension(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
     // A restored/reloaded Pi session must never replay the one-time welcome frame.
     clearIntentumWelcome(ctx.ui);
+    disposeChrome?.();
     if (runtime) await runtime.dispose();
     runtime = new IntentumRuntime(ctx.cwd);
     const recovery = await runtime.onSessionStart(ctx);
+    // Pi's startup hints and three-line footer give way to one card and one line.
+    disposeChrome = await installSessionChrome(runtime, ctx);
     if (recovery.reconciled.length > 0) {
       ctx.ui.notify(
         `intentum reconciled ${recovery.reconciled.length} durable Worker result(s) after restart (${recovery.reconciled.join(", ")}). Inspect the preserved result before integration or replacement work.`,
@@ -70,6 +75,8 @@ export default function intentumExtension(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", async (_event, ctx) => {
     clearIntentumWelcome(ctx.ui);
+    disposeChrome?.();
+    disposeChrome = undefined;
     const current = runtime;
     runtime = undefined;
     await current?.dispose();

@@ -21,7 +21,7 @@
 2. 未初始化项目执行无参数 `/intentum` 时的欢迎 Banner；
 3. 按终端宽度选择 big/small/logo-only/`⋗ intentum` fallback；
 4. 只给 mark point 使用 Signal red，wordmark 保持默认前景色；
-5. status widget 的 `⋗ intentum` 标识；
+5. session chrome：TUI 模式下用品牌卡片替换 Pi 启动提示、单行 `⋗ intentum` footer，编辑器上方只显示需要处理的事项；
 6. `intentum` 启动器（`init`/`status`/`doctor`/透传 Pi 参数）以及 `--help`/`--version`；`pi-intentum` 为同一可执行文件的历史别名；
 7. 将 `brand/` 纳入 npm `files` 和 pack manifest，并增加资产、宽度、一次性显示和 RPC 回归测试。
 
@@ -45,6 +45,7 @@
 12. 显式 `--no-ff` merge；target branch/base/head/Git-operation 前置校验；真实冲突自动 abort；幂等 crash reconciliation；integration 在 runtime dispose 前被 cancel/drain。
 13. 从 `brand/ascii/` 读取的响应式、一次性欢迎 Banner；Pi TUI 每行 `Text` 渲染；Signal point 精确着色；RPC 使用可序列化行且 restore 不重放。
 14. `intentum` 启动器（launch/init/status/doctor，见 `tests/cli-launcher.test.ts`）、`--help/--version`、品牌资源发布白名单、真实 tarball 离线安装与已安装 `intentum`/`pi-intentum` bin 执行门禁。
+15. Focus View 状态 widget（phase `4/8`、feature、最近结果、风险、是否需要决策、相关操作）与 `/intentum` 控制面板 overlay（Overview/Workers/Decisions/Help；键盘全覆盖；Pi regular 模式下按 SGR 鼠标协议点击/滚轮/点击外部关闭，鼠标上报只在面板打开期间启用；fullscreen 模式下 Pi viewport 独占鼠标，面板仅键盘）。决策只会草拟到 editor，不在面板内直接裁决。见 `src/tui/control-panel.ts`、`src/tools/control-panel-host.ts`、`tests/control-panel*.test.ts`。
 
 ## 关键不变量
 
@@ -111,7 +112,7 @@ pnpm exec pi --version
 | sandbox 内代表性依赖 build/test | NOT_PROVEN |
 | provider-backed Worker 完成真实任务 | NOT_PROVEN |
 | live streaming pause/steer timing | NOT_PROVEN |
-| interactive TUI component rendering | unit PASS（真实 `Container`/逐行 `Text`）；人工视觉验收 NOT_RUN |
+| interactive TUI component rendering | unit PASS（真实 `Container`/逐行 `Text`）；控制面板在真实 Pi 0.84.4 TUI（expect 驱动的 pty，120×40）中完成一次性验收：overlay 渲染、SGR 点击切换 Workers tab、点击外部关闭、鼠标上报启用/关闭各一次；人工视觉验收仍为手动门禁 |
 | one-off `--api-key` 继承到 child runtime | NOT_PROVEN |
 | 动态注册第三方 provider 继承 | NOT_PROVEN |
 

@@ -19,7 +19,7 @@ The implementation is a real **Phase 1 + single-Worker Phase 2 controller slice*
 - explicit project lifecycle transitions;
 - a bounded Designer system-context injection;
 - a one-time, responsive terminal welcome sourced from the shipped brand assets;
-- compact `⋗ intentum` status widget and status line;
+- a quiet session chrome: a startup card in place of Pi's key hints, a one-line footer, an attention-only widget above the editor, and a mouse-clickable control panel;
 - command-only RPC loading and initialization without a provider request.
 
 ### Phase 2 — one strong Worker
@@ -140,6 +140,37 @@ adjacent to the editor rather than in the scrolling transcript. Running `/intent
 without arguments in an uninitialized repository shows the same one-time welcome.
 Session restore, status output, Worker cards, and later commands use only the compact
 `⋗ intentum` identity.
+
+### Session chrome, attention widget, and control panel
+
+In Pi's terminal mode Intentum replaces Pi's startup key hints with a small card (logo,
+`intentum vX.Y.Z`, model and thinking level, working directory) and Pi's three-line footer
+with one line: `⋗ intentum · <project> · build 4/8 · balanced` on the left, plus a worker
+count, `⚠ n`, or `◆ decision` only when they apply, and the Git branch and context usage on
+the right. Above the editor nothing is shown while the project is idle; the widget appears
+only for a completed result awaiting integration, a blocked or failed Worker, or a blocking
+decision. Everything else lives in the control panel.
+
+Pi's own `[Skills]`, `[Prompts]`, and `[Extensions]` listing is printed by Pi, not by
+Intentum; set `"quietStartup": true` in `~/.pi/agent/settings.json` (or the project's
+`.pi/settings.json`) to hide it.
+
+`/intentum` with no arguments opens the control panel as an overlay with four tabs:
+Overview (next step, phase trail, decision and worker highlights, project actions),
+Workers (one row per Worker with status-appropriate buttons such as Steer, Pause,
+Resume, Integrate, Abort, and Details), Decisions (options, the Designer's
+recommendation, affected work), and Help. The panel updates live while it is open.
+
+Every control works with the keyboard (`↑↓`/`j`/`k` move, `⏎` acts, `tab` or `1`-`4`
+switch tabs, `p` pauses or resumes, `esc` closes). In Pi's fullscreen mode, which the
+`intentum` launcher uses by default, the viewport owns the mouse, so the panel is
+keyboard-only there. In Pi's regular terminal mode (`intentum --tui-mode regular`, or
+plain `pi`) the panel also takes the mouse: click a tab, a row, or a `[button]`, scroll
+with the wheel, and click outside the panel to close it. Mouse reporting is enabled
+only while the panel is open, so native selection and scrollback return as soon as it
+closes.
+Choosing a decision in the panel drafts the message into the editor; you still send
+it to the Designer yourself.
 
 The target repository must already have `HEAD`; Intentum refuses to create a Worker from an unborn branch. Review project-local package resources before trusting a project in Pi.
 

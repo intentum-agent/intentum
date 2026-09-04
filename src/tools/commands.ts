@@ -6,6 +6,9 @@ import type {
 import { Container, Text } from "@earendil-works/pi-tui";
 import type { IntentumRuntime } from "../runtime/intentum-runtime.js";
 import type { ProjectState, WorkerRecord } from "../state/schema.js";
+import { openControlPanel } from "./control-panel-host.js";
+import type { PanelTab } from "../tui/control-panel.js";
+import { renderStatusBrief } from "../tui/status-widget.js";
 import {
   BRAND_WIDGET_KEY,
   type BrandAssets,
@@ -28,7 +31,7 @@ const runtimePresentations = new WeakMap<IntentumRuntime, IntentumCommandPresent
 
 export function registerIntentumCommands(pi: ExtensionAPI, runtimeSource: IntentumRuntimeSource): void {
   pi.registerCommand("intentum", {
-    description: "Initialize, inspect, pause, resume, steer, and integrate an intentum project",
+    description: "Open the intentum control panel, or init, inspect, pause, resume, steer, and integrate the project",
     handler: async (rawArgs, ctx) => {
       try {
         const runtime = resolveRuntime(runtimeSource);
@@ -38,6 +41,17 @@ export function registerIntentumCommands(pi: ExtensionAPI, runtimeSource: Intent
       }
     },
   });
+}
+
+/**
+ * A project named after the tool itself would read "intentum initialized intentum".
+ */
+function initMessage(projectName: string, created: boolean): string {
+  const tail = created ? "in discovery phase." : "existing artifacts were preserved.";
+  if (projectName.trim().toLowerCase() === "intentum") {
+    return created ? `Project intentum initialized ${tail}` : `Project intentum is already initialized; ${tail}`;
+  }
+  return created ? `intentum initialized ${projectName} ${tail}` : `intentum already initialized ${projectName}; ${tail}`;
 }
 
 function resolveRuntime(source: IntentumRuntimeSource): IntentumRuntime {
@@ -59,22 +73,18 @@ export async function handleIntentumCommand(
       const name = args.join(" ").trim() || undefined;
       const result = await runtime.initialize(name);
       if (result.created) await showIntentumWelcomeOnce(ctx, presentation);
-      ctx.ui.notify(
-        result.created
-          ? `intentum initialized ${result.state.projectName} in discovery phase.`
-          : `intentum already initialized ${result.state.projectName}; existing artifacts were preserved.`,
-        "info",
-      );
+      ctx.ui.notify(initMessage(result.state.projectName, result.created), "info");
       return;
     }
     case "status": {
       clearIntentumWelcome(ctx.ui);
-      ctx.ui.notify((await runtime.status()).text, "info");
+      ctx.ui.notify(renderStatusBrief((await runtime.status()).state), "info");
       return;
     }
     case "workers": {
       clearIntentumWelcome(ctx.ui);
       const { state } = await runtime.status();
+      if (ctx.mode === "tui") return openControlPanel(runtime, ctx, state, "workers");
       const workers = Object.values(state.workers);
       ctx.ui.notify(
         workers.length
@@ -84,16 +94,31 @@ export async function handleIntentumCommand(
       );
       return;
     }
+    case "panel":
+    case "decisions": {
+      clearIntentumWelcome(ctx.ui);
+      const { state } = await runtime.status();
+      const tab: PanelTab = command.toLowerCase() === "decisions" ? "decisions" : "overview";
+      if (ctx.mode === "tui") return openControlPanel(runtime, ctx, state, tab);
+      const decisions = state.pendingDecisions;
+      ctx.ui.notify(
+        decisions.length
+          ? decisions.map((decision) => `${decision.id} · ${decision.blocking ? "blocking" : "open"} · ${decision.title}`).join("\n")
+          : "No pending decision.",
+        "info",
+      );
+      return;
+    }
     case "pause": {
       clearIntentumWelcome(ctx.ui);
       await runtime.pauseProject();
-      ctx.ui.notify("Project scheduling paused. Active Workers received a safe-pause request; their worktrees were preserved.", "warning");
+      ctx.ui.notify("Project paused. Active Workers stop at their next safe point; worktrees are kept.", "warning");
       return;
     }
     case "resume": {
       clearIntentumWelcome(ctx.ui);
       const state = await runtime.resumeProject();
-      ctx.ui.notify(`Project resumed in ${state.phase} phase. Resume a paused Worker explicitly when ready.`, "info");
+      ctx.ui.notify(`Project resumed in ${state.phase} phase.`, "info");
       return;
     }
     case "steer": {
@@ -153,6 +178,7 @@ export async function handleIntentumCommand(
       }
       clearIntentumWelcome(ctx.ui);
       const { state } = await runtime.status();
+      if (ctx.mode === "tui") return openControlPanel(runtime, ctx, state);
       ctx.ui.notify(relevantHelp(state), "info");
       return;
     }
@@ -272,7 +298,8 @@ function uninitializedHelp(): string {
 
 function relevantHelp(state: ProjectState): string {
   const workers = Object.values(state.workers);
-  const lines = ["/intentum status", "/intentum workers"];
+  const lines = ["/intentum  (control panel)", "/intentum status", "/intentum workers"];
+  if (state.pendingDecisions.length) lines.push("/intentum decisions");
 
   if (state.phase === "paused" || state.schedulerPaused) {
     lines.push("/intentum resume");
@@ -288,7 +315,7 @@ function relevantHelp(state: ProjectState): string {
   if (active) lines.push(`/intentum steer ${active.id} message`);
 
   lines.push("Use normal conversation for product decisions and new Worker outcomes.");
-  return lines.slice(0, 6).join("\n");
+  return lines.slice(0, 8).join("\n");
 }
 
 function isActiveWorker(worker: WorkerRecord): boolean {

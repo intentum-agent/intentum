@@ -146,9 +146,38 @@ describe("intentum extension registration", () => {
 
       await handleIntentumCommand(runtime, "", harness.context);
       expect(harness.widgets.filter((call) => typeof call.content === "function")).toHaveLength(1);
-      const helpLines = harness.notifications.at(-1)?.message.split("\n") ?? [];
+      expect(harness.customs).toHaveLength(1);
+      expect(harness.customs[0]?.rendered.join("\n")).toContain("⋗ intentum · Branded Fixture");
+
+      const rpc = createUiHarness(fixture.repo, "rpc");
+      await handleIntentumCommand(runtime, "", rpc.context);
+      expect(rpc.customs).toHaveLength(0);
+      const helpLines = rpc.notifications.at(-1)?.message.split("\n") ?? [];
+      expect(helpLines[0]).toBe("/intentum  (control panel)");
       expect(helpLines.length).toBeGreaterThanOrEqual(4);
-      expect(helpLines.length).toBeLessThanOrEqual(6);
+      expect(helpLines.length).toBeLessThanOrEqual(8);
+    } finally {
+      await runtime.dispose();
+      await fixture.cleanup();
+    }
+  });
+
+  it("drops the repeated name when the project is named after the tool", async () => {
+    const fixture = await createTempRepository();
+    const runtime = new IntentumRuntime(fixture.repo, {
+      cacheRoot: fixture.cache,
+      workerRuntimeFactory: new ScriptedWorkerFactory(),
+      projectTrusted: true,
+    });
+    const harness = createUiHarness(fixture.repo);
+    try {
+      await handleIntentumCommand(runtime, "init Intentum", harness.context);
+      expect(harness.notifications.at(-1)?.message).toBe("Project intentum initialized in discovery phase.");
+
+      await handleIntentumCommand(runtime, "init", harness.context);
+      expect(harness.notifications.at(-1)?.message).toBe(
+        "Project intentum is already initialized; existing artifacts were preserved.",
+      );
     } finally {
       await runtime.dispose();
       await fixture.cleanup();
@@ -332,6 +361,7 @@ interface UiHarness {
   context: ExtensionCommandContext;
   notifications: Array<{ message: string; type?: string }>;
   widgets: Array<{ key: string; content: unknown }>;
+  customs: Array<{ overlay: boolean; rendered: string[] }>;
   statuses: Array<{ key: string; text: string | undefined }>;
 }
 
@@ -343,6 +373,7 @@ function createUiHarness(
   const notifications: UiHarness["notifications"] = [];
   const widgets: UiHarness["widgets"] = [];
   const statuses: UiHarness["statuses"] = [];
+  const customs: UiHarness["customs"] = [];
   let remainingWidgetFailures = typeof throwOnWidget === "number"
     ? throwOnWidget
     : throwOnWidget ? Number.POSITIVE_INFINITY : 0;
@@ -361,6 +392,20 @@ function createUiHarness(
       statuses.push({ key, text });
     },
     confirm: async () => true,
+    onTerminalInput: () => () => {},
+    async custom(
+      factory: (tui: unknown, theme: unknown, keybindings: unknown, done: (result: unknown) => void) =>
+        { render(width: number): string[]; dispose?(): void },
+      options?: { overlay?: boolean },
+    ) {
+      // A synchronous stand-in for Pi's overlay: build, render once, then close.
+      const tui = { mode: "regular", terminal: { columns: 100, rows: 30, write() {} }, requestRender() {} };
+      const theme = { fg: (_color: string, text: string) => text, bg: (_color: string, text: string) => text, bold: (text: string) => text };
+      const component = await factory(tui, theme, {}, () => {});
+      customs.push({ overlay: options?.overlay ?? false, rendered: component.render(96) });
+      component.dispose?.();
+      return undefined;
+    },
   } as unknown as ExtensionUIContext;
   const context = {
     cwd,
@@ -369,7 +414,7 @@ function createUiHarness(
     hasUI: true,
     isProjectTrusted: () => true,
   } as unknown as ExtensionCommandContext;
-  return { context, notifications, widgets, statuses };
+  return { context, notifications, widgets, statuses, customs };
 }
 
 function stripAnsi(value: string): string {

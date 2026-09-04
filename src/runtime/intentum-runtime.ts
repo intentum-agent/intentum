@@ -1,6 +1,7 @@
 import type {
   CreateAgentSessionOptions,
   ExtensionContext,
+
   ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
 import { realpath } from "node:fs/promises";
@@ -14,7 +15,7 @@ import { IntegrationManager } from "../git/integration-manager.js";
 import { PiWorkerRuntimeFactory } from "./pi-worker-runtime.js";
 import { WorkerManager, type NewWorkContract } from "../work/worker-manager.js";
 import type { WorkerRuntimeFactory } from "./worker-runtime.js";
-import { renderStatusText, renderStatusWidget } from "../tui/status-widget.js";
+import { renderStatusText, renderStatusWidget, summarizeWorkers } from "../tui/status-widget.js";
 import { intentumLabel } from "../tui/brand.js";
 import { acquireFileLease, type FileLease } from "../utils/file-lock.js";
 import { assertRepositoryOwnedPath, ensureRepositoryOwnedDirectory } from "../utils/safe-path.js";
@@ -37,6 +38,8 @@ export class IntentumRuntime {
   readonly controller: ProjectController;
   readonly workers: WorkerManager;
   private ui: ExtensionUIContext | undefined;
+  private uiMode: ExtensionContext["mode"] | undefined;
+  private readonly stateListeners = new Set<(state: ProjectState) => void>();
   private recovered = false;
   private controllerLease: FileLease | undefined;
   private controllerLeasePromise: Promise<FileLease> | undefined;
@@ -85,6 +88,7 @@ export class IntentumRuntime {
   private async onSessionStartUnlocked(ctx: ExtensionContext): Promise<IntentumRecoverySummary> {
     await this.assertContextRoot(ctx.cwd);
     this.ui = ctx.ui;
+    this.uiMode = ctx.mode;
     this.workers.activate();
     this.setWorkerSessionDefaults(ctx);
 
@@ -135,6 +139,17 @@ export class IntentumRuntime {
       this.recovered = true;
       return result;
     });
+  }
+
+  /**
+   * Observe canonical state changes. Listeners are UI observers: a throwing
+   * listener is dropped from the notification, never from the transition.
+   */
+  onStateChange(listener: (state: ProjectState) => void): () => void {
+    this.stateListeners.add(listener);
+    return () => {
+      this.stateListeners.delete(listener);
+    };
   }
 
   async status(): Promise<{ state: ProjectState; text: string }> {
@@ -361,24 +376,28 @@ ${JSON.stringify(decisions)}
   }
 
   private refreshUi(state: ProjectState): void {
+    for (const listener of this.stateListeners) {
+      try {
+        listener(state);
+      } catch {
+        // UI is an observer of canonical state, never a lifecycle gate.
+      }
+    }
     if (!this.ui) return;
     try {
-      this.ui.setWidget("intentum", renderStatusWidget(state), { placement: "aboveEditor" });
+      const lines = renderStatusWidget(state, { color: this.uiMode === "tui" });
+      // An idle project shows nothing above the editor; an empty widget would still take a row.
+      this.ui.setWidget("intentum", lines.length ? lines : undefined, { placement: "aboveEditor" });
     } catch {
       // UI is an observer of canonical state, never a lifecycle gate.
     }
-    const active = Object.values(state.workers).filter((worker) =>
-      ["starting", "working", "pause_requested", "verifying"].includes(worker.status),
-    ).length;
     try {
-      this.ui.setStatus(
-        "intentum",
-        `${intentumLabel()} · ${state.phase}${active ? ` · ${active} worker` : ""}`,
-      );
+      this.ui.setStatus("intentum", statusLineText(state));
     } catch {
       // UI is an observer of canonical state, never a lifecycle gate.
     }
   }
+
 }
 
 function truncate(value: string, maximum: number): string {
@@ -389,4 +408,14 @@ function truncate(value: string, maximum: number): string {
 function boundedUntrustedText(value: string, maximum: number): string {
   const singleLine = value.replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim();
   return singleLine.length <= maximum ? singleLine : `${singleLine.slice(0, maximum - 1)}…`;
+}
+
+/** One footer line: identity, phase, and only the counts that need a glance. */
+function statusLineText(state: ProjectState): string {
+  const summary = summarizeWorkers(Object.values(state.workers));
+  const parts = [`${intentumLabel()} · ${state.phase}`];
+  if (summary.active.length) parts.push(`${summary.active.length} worker${summary.active.length === 1 ? "" : "s"}`);
+  if (summary.attention.length) parts.push(`⚠ ${summary.attention.length}`);
+  if (state.pendingDecisions.some((decision) => decision.blocking)) parts.push("◆ decision");
+  return parts.join(" · ");
 }

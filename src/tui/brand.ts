@@ -97,7 +97,9 @@ export function intentumLabel(
   const unicode = options.unicode ?? (process.env.INTENTUM_ASCII_MARK !== "1");
   const glyph = unicode ? INTENTUM_GLYPH : INTENTUM_GLYPH_FALLBACK;
   const base = `${glyph} ${PLAIN_WORDMARK}`;
-  return projectName ? `${base} · ${projectName}` : base;
+  // A project named after the tool itself would read "intentum · intentum".
+  if (!projectName || projectName.trim().toLowerCase() === PLAIN_WORDMARK) return base;
+  return `${base} · ${projectName}`;
 }
 
 /**

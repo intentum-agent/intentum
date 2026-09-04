@@ -91,6 +91,7 @@ describe("terminal brand renderer", () => {
   it("provides the compact post-banner identity and documented glyph fallback", async () => {
     expect(intentumLabel()).toBe(`${INTENTUM_GLYPH} intentum`);
     expect(intentumLabel("my-app")).toBe(`${INTENTUM_GLYPH} intentum · my-app`);
+    expect(intentumLabel("intentum")).toBe(`${INTENTUM_GLYPH} intentum`);
     expect(intentumLabel("my-app", { unicode: false })).toBe(`${INTENTUM_GLYPH_FALLBACK} intentum · my-app`);
 
     expect((await renderBrandFrame({ columns: 11 })).lines).toEqual([`${INTENTUM_GLYPH} intentum`]);
