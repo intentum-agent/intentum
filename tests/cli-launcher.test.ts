@@ -82,10 +82,24 @@ describe("intentum launcher", () => {
     expect(code).toBe(0);
     expect(launches).toEqual([{
       command: "/fake/pi",
-      args: ["-e", projectRoot, "--model", "sonnet"],
+      args: ["-e", projectRoot, "--tui-mode", "fullscreen", "--model", "sonnet"],
       cwd: repo.repo,
     }]);
     expect(stderr.output).toBe("");
+  });
+
+  it("keeps an explicit --tui-mode instead of forcing fullscreen", async () => {
+    const launches: RecordedLaunch[] = [];
+    const code = await runCli(["--tui-mode", "regular"], {
+      stdout: captureStream(),
+      stderr: captureStream(),
+      env,
+      cwd: repo.repo,
+      spawn: recordingSpawn(launches),
+      platform: "linux",
+    });
+    expect(code).toBe(0);
+    expect(launches[0]?.args).toEqual(["-e", projectRoot, "--tui-mode", "regular"]);
   });
 
   it("turns `intentum init <name>` into the /intentum init command and forwards pi options after --", async () => {
@@ -99,7 +113,7 @@ describe("intentum launcher", () => {
       platform: "linux",
     });
     expect(code).toBe(0);
-    expect(launches[0]?.args).toEqual(["-e", projectRoot, "--no-session", "--", "/intentum init My Product"]);
+    expect(launches[0]?.args).toEqual(["-e", projectRoot, "--tui-mode", "fullscreen", "--no-session", "--", "/intentum init My Product"]);
   });
 
   it("returns pi's exit status", async () => {
@@ -132,7 +146,7 @@ describe("intentum launcher", () => {
       spawn: recordingSpawn(launches),
       platform: "linux",
     });
-    expect(launches[0]?.args).toEqual([]);
+    expect(launches[0]?.args).toEqual(["--tui-mode", "fullscreen"]);
   });
 
   it("recognizes a project-local path entry that points at this checkout", async () => {
@@ -158,10 +172,10 @@ describe("intentum launcher", () => {
     expect(code).toBe(0);
     expect(launches[0]?.command).toBe(process.execPath);
     expect(launches[0]?.args[0]).toMatch(/pi-coding-agent[\/]dist[\/]bundle[\/]cli\.js$/);
-    expect(launches[0]?.args.slice(1)).toEqual(["-e", projectRoot]);
+    expect(launches[0]?.args.slice(1)).toEqual(["-e", projectRoot, "--tui-mode", "fullscreen"]);
   });
 
-  it("warns, but still launches, outside a Git repository and off Linux", async () => {
+  it("warns about the repository, but not the platform, and still launches", async () => {
     const launches: RecordedLaunch[] = [];
     const stderr = captureStream();
     const code = await runCli([], {
@@ -175,7 +189,7 @@ describe("intentum launcher", () => {
     expect(code).toBe(0);
     expect(launches).toHaveLength(1);
     expect(stderr.output).toContain("not a Git repository");
-    expect(stderr.output).toContain("Workers need Linux with Bubblewrap");
+    expect(stderr.output).not.toContain("Bubblewrap");
   });
 });
 

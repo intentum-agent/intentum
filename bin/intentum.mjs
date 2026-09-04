@@ -18,6 +18,7 @@ const SIGNAL_RED = "[31m";
 const DEFAULT_FOREGROUND = "[39m";
 const MINIMUM_NODE = [22, 19, 0];
 const PI_PACKAGE = "@earendil-works/pi-coding-agent";
+const DEFAULT_TUI_MODE = "fullscreen";
 const TRUSTED_BWRAP_CANDIDATES = ["/usr/bin/bwrap", "/bin/bwrap"];
 
 const packageUrl = new URL("../package.json", import.meta.url);
@@ -131,6 +132,7 @@ async function showHelp(stdout, env) {
     "  intentum status            Show the project phase and Workers without starting Pi",
     "  intentum doctor            Check Node, Git, Pi, and the Worker sandbox",
     "  intentum [pi options]      Anything else is passed to pi, e.g. --model sonnet",
+    "  intentum --tui-mode regular  Keep Pi's inline mode instead of the fullscreen default",
     "",
     "Options:",
     "  -h, --help                 Show this help",
@@ -436,7 +438,7 @@ function waitForExit(child) {
   });
 }
 
-async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn, platform }) {
+async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn }) {
   const pi = await locatePi({ env });
   if (!pi) {
     stderr.write([
@@ -455,12 +457,15 @@ async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn, platf
   else if (!repo.atRoot) hints.push(`starting from a subdirectory; Intentum manages the repository root ${repo.root}. Run it from there.`);
   else if (!repo.hasHead) hints.push("this repository has no commits yet; make a first commit before starting a Worker.");
   else if (!repo.branch) hints.push("HEAD is detached; check out a named branch before starting a Worker.");
-  if (platform !== "linux") hints.push(`Workers need Linux with Bubblewrap; on ${platform} you can plan and init but not run a Worker.`);
+  // Platform limits are reported by `intentum doctor`, not on every launch.
   for (const hint of hints) stderr.write(`${mark(env)} intentum: ${hint}\n`);
 
   const registered = await intentumRegisteredInPi({ cwd, env });
   const args = [...pi.args];
   if (!registered) args.push("-e", packageRoot);
+  // Pi's alternate-screen mode: the session fills the terminal, the shell's
+  // earlier output stays hidden, and there is no scrollback to fall out of.
+  if (!piArgs.includes("--tui-mode")) args.push("--tui-mode", DEFAULT_TUI_MODE);
   args.push(...piArgs);
   if (initialMessage) args.push("--", initialMessage);
 

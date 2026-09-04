@@ -102,8 +102,12 @@ Pi as `/intentum init`, `/intentum status`, and so on.
 
 The `intentum` command is a thin launcher. It finds `pi` on your `PATH` (or the Pi
 package this package resolves against, or `$INTENTUM_PI`), adds `-e <package>` unless
-Pi's settings already register Intentum, and hands the terminal to Pi. It never talks
-to a model itself. Pi owns model/provider authentication and session transcripts;
+Pi's settings already register Intentum, starts Pi in its fullscreen (alternate
+screen) mode so the session fills the terminal without the shell's earlier output or
+scrollback behind it, and hands the terminal to Pi. Pass `--tui-mode regular` to keep
+Pi's inline mode instead. On exit Pi prints the transcript back into the terminal by
+default; Pi's `fullscreenExitOutput` setting (`/settings` inside Pi) switches that to a
+short resume hint. The launcher never talks to a model itself. Pi owns model/provider authentication and session transcripts;
 Intentum stores only the Pi session reference and does not copy transcripts into `.intentum/`.
 
 `intentum doctor` reports what will and will not work on this machine. On macOS it
@@ -192,9 +196,11 @@ Typical flow:
 
 | Command | Effect |
 | --- | --- |
+| `/intentum` | Open the control panel (overview, workers, decisions, help). Text help in RPC mode. |
 | `/intentum init [name]` | Idempotently initialize state and product artifacts. |
-| `/intentum status` | Show the current phase, autonomy, active feature, and Worker summary. |
-| `/intentum workers` | List Worker state and the latest bounded summary. |
+| `/intentum status` | Show the current phase, autonomy, active feature, Worker, and decision summary as text. |
+| `/intentum workers` | Open the panel on the Workers tab; list Worker state as text in RPC mode. |
+| `/intentum decisions` | Open the panel on the Decisions tab; list pending decisions as text in RPC mode. |
 | `/intentum pause` | Pause project scheduling and steer a live Worker toward a safe boundary. |
 | `/intentum resume` | Resume project scheduling in the phase that preceded the pause. |
 | `/intentum steer W-001 message` | Send an instruction now, or queue it while paused/interrupted/blocked. |
