@@ -15,6 +15,7 @@ import { homedir } from "node:os";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { promisify } from "node:util";
 import { runFile } from "../utils/process.js";
+import { CONTROLLER_OWNED_REPOSITORY_PATHS } from "../utils/safe-path.js";
 
 const execFileAsync = promisify(execFile);
 const TRUSTED_BWRAP_CANDIDATES = ["/usr/bin/bwrap", "/bin/bwrap"] as const;
@@ -51,7 +52,7 @@ export async function createWorkerSandboxTools(
   worktreePath: string,
 ): Promise<ToolDefinition<any, any, any>[]> {
   const root = await realpath(worktreePath);
-  await ensureControllerDirectory(root);
+  await ensureControllerDirectories(root);
   const bwrap = await findTrustedBubblewrap();
   if (!bwrap) {
     throw new Error("Intentum Worker execution requires bubblewrap (bwrap) for a write-confined, network-isolated shell");
@@ -209,7 +210,10 @@ export function buildBubblewrapCommand(options: BubblewrapCommandOptions): strin
     "--dev", "/dev",
     "--proc", "/proc",
   ];
-  const protectedPaths = [join(worktree, ".git"), join(worktree, ".intentum")];
+  const protectedPaths = [
+    join(worktree, ".git"),
+    ...CONTROLLER_OWNED_REPOSITORY_PATHS.map((owned) => join(worktree, owned)),
+  ];
   const destinations = [
     ...readOnlyPaths,
     ...symlinks.map((item) => item.destination),
@@ -402,22 +406,30 @@ export async function assertWorkerMutablePath(root: string, path: string): Promi
   return assertProspectiveMutablePath(await realpath(root), path);
 }
 
-async function ensureControllerDirectory(root: string): Promise<void> {
-  const path = join(root, ".intentum");
-  try {
-    const metadata = await lstat(path);
-    if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
-      throw new Error("Worker worktree .intentum path must be a real directory");
+/**
+ * Every controller-owned directory must exist before the sandbox is built:
+ * `--ro-bind` needs a real source, and an existing read-only bind is what stops
+ * the Worker's shell from creating one. Empty directories are invisible to Git,
+ * so this does not disturb the worktree cleanliness checks.
+ */
+async function ensureControllerDirectories(root: string): Promise<void> {
+  for (const owned of CONTROLLER_OWNED_REPOSITORY_PATHS) {
+    const path = join(root, owned);
+    try {
+      const metadata = await lstat(path);
+      if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+        throw new Error(`Worker worktree ${owned} path must be a real directory`);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await mkdir(path, { recursive: false });
     }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    await mkdir(path, { recursive: false });
   }
 }
 
 function assertNotControllerPath(root: string, candidate: string): void {
   const first = relative(root, candidate).split(sep)[0];
-  if (first === ".git" || first === ".intentum") {
+  if (first === ".git" || (first !== undefined && (CONTROLLER_OWNED_REPOSITORY_PATHS as readonly string[]).includes(first))) {
     throw new Error(`Worker tools cannot mutate controller-owned ${first} paths`);
   }
 }

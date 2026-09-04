@@ -98,7 +98,7 @@ describe("PiWorkerRuntimeFactory", () => {
       const sessionRef = manager.getSessionFile();
       if (!sessionRef) throw new Error("Pi did not create a persistent session reference");
 
-      await expect(new ConstructionOnlyPiWorkerRuntimeFactory(join(fixture.root, "new-pi-sessions")).restore({
+      const restore = new ConstructionOnlyPiWorkerRuntimeFactory(join(fixture.root, "new-pi-sessions")).restore({
         workerId: "W-001",
         worktreePath: fixture.repo,
         sessionRef,
@@ -109,7 +109,19 @@ describe("PiWorkerRuntimeFactory", () => {
           escalate: async () => undefined,
           complete: async () => undefined,
         },
-      })).rejects.toThrow("model selection requires explicit review");
+      });
+      // Dispose instead of leaking when a session is unexpectedly constructed:
+      // asserting on the outcome keeps the failure message about model
+      // selection rather than about the TUI theme Vitest touches while
+      // serializing a live AgentSession.
+      const outcome = await restore.then(
+        async (runtime) => {
+          await runtime.dispose();
+          return "restore constructed a Worker session instead of rejecting";
+        },
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+      expect(outcome).toContain("model selection requires explicit review");
     } finally {
       await fixture.cleanup();
     }

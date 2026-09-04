@@ -154,12 +154,12 @@ describe("Worker safety boundaries", () => {
 
       await writeFile(join(worker.worktreePath, ".intentum", "state.json"), "{}\n", "utf8");
       await expect(create.callbacks.commit({ message: "bad: mutate controller state" })).rejects.toThrow(
-        "controller-owned .intentum paths",
+        "controller-owned paths (.intentum, .pi)",
       );
       await runFile("git", ["add", ".intentum/state.json"], worker.worktreePath);
       await runFile("git", ["commit", "-m", "bad: mutate controller state"], worker.worktreePath);
       await expect(create.callbacks.complete(completedResult([".intentum/state.json"]))).rejects.toThrow(
-        "controller-owned .intentum state",
+        "controller-owned state (.intentum, .pi)",
       );
       expect((await runtime.workers.inspect("W-001")).worker.status).toBe("working");
     } finally {

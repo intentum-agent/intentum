@@ -292,6 +292,11 @@ describe("restart recovery", () => {
       await factory.restoreEntered;
       const steer = second.workers.steer("W-001", "Instruction arriving during restore.");
       const abort = second.workers.abort("W-001", "operator stop during recovery");
+      // The abort must reach its durable `interrupted` transition before the
+      // restore is released. Releasing first lets the restored runtime attach
+      // and the abort takes the live-session path instead, which is a valid
+      // outcome but a different one than this test is about.
+      await waitForWorkerStatus(second, "W-001", "interrupted");
       factory.releaseRestore();
       await expect(resume).rejects.toThrow("superseded by an emergency abort");
       await Promise.all([steer, abort]);
@@ -568,5 +573,20 @@ class BrokenRestoreFactory extends ScriptedWorkerFactory {
     const runtime = new ScriptedWorkerRuntime(input.workerId, sessionRef);
     this.runtimes.set(input.workerId, runtime);
     return runtime;
+  }
+}
+
+/** Poll canonical state instead of racing an unobservable async boundary. */
+async function waitForWorkerStatus(
+  runtime: IntentumRuntime,
+  workerId: string,
+  status: string,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if ((await runtime.store.read()).workers[workerId]?.status === status) return;
+    if (Date.now() >= deadline) throw new Error(`Worker ${workerId} never reached ${status}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
   }
 }

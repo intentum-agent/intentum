@@ -102,6 +102,56 @@ describe("intentum launcher", () => {
     expect(launches[0]?.args).toEqual(["-e", projectRoot, "--tui-mode", "regular"]);
   });
 
+  it("normalises --tui-mode=<value>, which Pi's own parser does not accept", async () => {
+    const launches: RecordedLaunch[] = [];
+    const code = await runCli(["--tui-mode=regular"], {
+      stdout: captureStream(),
+      stderr: captureStream(),
+      env,
+      cwd: repo.repo,
+      spawn: recordingSpawn(launches),
+      platform: "linux",
+    });
+    expect(code).toBe(0);
+    expect(launches[0]?.args).toEqual(["-e", projectRoot, "--tui-mode", "regular"]);
+  });
+
+  it("stops the init project name at the first pi option instead of absorbing it", async () => {
+    const launches: RecordedLaunch[] = [];
+    const code = await runCli(["init", "My", "Product", "--model", "sonnet"], {
+      stdout: captureStream(),
+      stderr: captureStream(),
+      env,
+      cwd: repo.repo,
+      spawn: recordingSpawn(launches),
+      platform: "linux",
+    });
+    expect(code).toBe(0);
+    expect(launches[0]?.args).toEqual([
+      "-e", projectRoot, "--tui-mode", "fullscreen", "--model", "sonnet", "--", "/intentum init My Product",
+    ]);
+  });
+
+  it("reads Pi settings from PI_CODING_AGENT_DIR so the package is not loaded twice", async () => {
+    const agentDir = join(home, "pi-config");
+    await mkdir(agentDir, { recursive: true });
+    await writeFile(join(agentDir, "settings.json"), JSON.stringify({ packages: ["npm:pi-intentum"] }), "utf8");
+    const scoped = { ...env, PI_CODING_AGENT_DIR: agentDir };
+    await expect(intentumRegisteredInPi({ cwd: repo.repo, env: scoped })).resolves.toBe("npm:pi-intentum");
+
+    const launches: RecordedLaunch[] = [];
+    const code = await runCli([], {
+      stdout: captureStream(),
+      stderr: captureStream(),
+      env: scoped,
+      cwd: repo.repo,
+      spawn: recordingSpawn(launches),
+      platform: "linux",
+    });
+    expect(code).toBe(0);
+    expect(launches[0]?.args).toEqual(["--tui-mode", "fullscreen"]);
+  });
+
   it("turns `intentum init <name>` into the /intentum init command and forwards pi options after --", async () => {
     const launches: RecordedLaunch[] = [];
     const code = await runCli(["init", "My", "Product", "--", "--no-session"], {

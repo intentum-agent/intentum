@@ -32,6 +32,7 @@ describe("Worker sandbox boundary", () => {
     expect(command).toContain("'--bind' '/fixture/worktree' '/fixture/worktree'");
     expect(command).toContain("'--ro-bind' '/fixture/worktree/.git' '/fixture/worktree/.git'");
     expect(command).toContain("'--ro-bind' '/fixture/worktree/.intentum' '/fixture/worktree/.intentum'");
+    expect(command).toContain("'--ro-bind' '/fixture/worktree/.pi' '/fixture/worktree/.pi'");
     expect(command).toContain("'--symlink' 'usr/bin' '/bin'");
     expect(command).toContain("'--' '/bin/sh' '-lc' 'printf ok'");
     expect(command).not.toContain("'--ro-bind' '/' '/'");
@@ -65,6 +66,10 @@ describe("Worker sandbox boundary", () => {
       expect(await assertWorkerMutablePath(worktree, "src/new.ts")).toBe(join(worktree, "src/new.ts"));
       await expect(assertWorkerMutablePath(worktree, "../outside/created.txt")).rejects.toThrow("escapes");
       await expect(assertWorkerMutablePath(worktree, ".intentum/state.json")).rejects.toThrow("controller-owned");
+      // A committed .pi/extensions entry would run as host code in the next
+      // project-trusted Pi session, so .pi is controller-owned too.
+      await expect(assertWorkerMutablePath(worktree, ".pi/extensions/x.ts")).rejects.toThrow("controller-owned");
+      await expect(assertWorkerMutablePath(worktree, ".pi/settings.json")).rejects.toThrow("controller-owned");
 
       // Model the exact cross-tool attack: isolated bash can create a dangling
       // absolute symlink, but the host-side write boundary rejects that path

@@ -44,3 +44,16 @@ export async function ensureRepositoryOwnedDirectory(projectRoot: string, target
   if (!metadata.isDirectory()) throw new Error(`Intentum controller directory is not a directory: ${checked}`);
   return checked;
 }
+
+/**
+ * Repository-relative directories the Worker must never create, mutate, or
+ * commit. `.intentum` is controller state; `.pi` configures Pi itself, and a
+ * committed `.pi/extensions/*` would run as host code in the next
+ * project-trusted Pi session.
+ */
+export const CONTROLLER_OWNED_REPOSITORY_PATHS = [".intentum", ".pi"] as const;
+
+/** True when a repository-relative path is, or sits inside, a controller-owned directory. */
+export function isControllerOwnedRepositoryPath(file: string): boolean {
+  return CONTROLLER_OWNED_REPOSITORY_PATHS.some((owned) => file === owned || file.startsWith(`${owned}/`));
+}

@@ -2,7 +2,12 @@ import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { runFile } from "../utils/process.js";
 import { withFileLock } from "../utils/file-lock.js";
-import { assertRepositoryOwnedPath, ensureRepositoryOwnedDirectory } from "../utils/safe-path.js";
+import {
+  assertRepositoryOwnedPath,
+  CONTROLLER_OWNED_REPOSITORY_PATHS,
+  ensureRepositoryOwnedDirectory,
+  isControllerOwnedRepositoryPath,
+} from "../utils/safe-path.js";
 import { unrelatedGitStatus } from "./status.js";
 
 const integrationTails = new Map<string, Promise<void>>();
@@ -77,11 +82,14 @@ export class IntegrationManager {
           { cause: error },
         );
       });
+    // --no-renames keeps the source path of a rename visible: with rename
+    // detection on, a commit that moves `.intentum/state.json` out of the
+    // directory would report only the destination and pass this check.
     const changedFiles = (await git(
-      ["diff", "-z", "--name-only", `${request.expectedBaseCommit}..${request.resultCommit}`],
+      ["diff", "-z", "--no-renames", "--name-only", `${request.expectedBaseCommit}..${request.resultCommit}`],
     )).stdout.split("\0").filter(Boolean);
-    if (changedFiles.some((file) => file === ".intentum" || file.startsWith(".intentum/"))) {
-      throw new Error("integration result modifies controller-owned .intentum state");
+    if (changedFiles.some(isControllerOwnedRepositoryPath)) {
+      throw new Error(`integration result modifies controller-owned state (${CONTROLLER_OWNED_REPOSITORY_PATHS.join(", ")})`);
     }
     const branchHead = (await git(["rev-parse", `refs/heads/${request.workerBranch}`])).stdout;
     if (branchHead !== request.resultCommit) {
@@ -140,6 +148,26 @@ export class IntegrationManager {
             : `integration failed for ${request.workerId} before an Intentum merge state was created; the worker branch was preserved`,
           { cause: error },
         );
+      }
+      if (!mergeInProgress) {
+        // Git writes MERGE_HEAD only once it needs to record a conflicted
+        // merge. A `git merge` killed mid-checkout — abort signal, runFile
+        // timeout — therefore leaves no marker while the target worktree is
+        // already partially updated. The pre-merge state was verified clean,
+        // so anything dirty here came from this merge. Report it instead of
+        // claiming nothing was touched; automatic restoration is deliberately
+        // not attempted on the human's own worktree.
+        const [currentHead, dirty] = await Promise.all([
+          cleanupGit(["rev-parse", "HEAD"]).then((result) => result.stdout, () => ""),
+          unrelatedGitStatus(this.projectRoot).catch(() => ""),
+        ]);
+        if (dirty || (currentHead && currentHead !== targetHead)) {
+          throw new IntegrationConflictError(
+            `integration for ${request.workerId} was interrupted while git merge was updating the target worktree; `
+            + `it is partially merged and needs manual recovery (restore ${targetHead}), and the worker branch was preserved`,
+            { cause: error },
+          );
+        }
       }
       throw new Error(
         mergeInProgress

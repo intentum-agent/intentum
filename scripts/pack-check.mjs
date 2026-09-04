@@ -39,6 +39,15 @@ async function runRedirected(script, positionalArgs, cwd, timeout = 30_000, extr
   });
 }
 
+// npm drops these from every tarball even when their directory is listed in
+// "files". Requiring them in the manifest would fail the check on a stray
+// Finder or editor artefact while the published package is perfectly correct.
+const NEVER_PACKED = [/^\.DS_Store$/, /^\._/, /\.orig$/, /\.rej$/, /^\..*\.swp$/, /^npm-debug\.log$/];
+
+function alwaysExcludedByNpm(name) {
+  return NEVER_PACKED.some((pattern) => pattern.test(name));
+}
+
 try {
   await writeFile(userConfig, "", "utf8");
 
@@ -170,6 +179,7 @@ try {
 async function listFiles(directory, prefix) {
   const paths = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (alwaysExcludedByNpm(entry.name)) continue;
     const relative = `${prefix}/${entry.name}`;
     if (entry.isDirectory()) paths.push(...await listFiles(join(directory, entry.name), relative));
     else if (entry.isFile()) paths.push(relative);

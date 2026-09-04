@@ -84,6 +84,58 @@ describe("intentum extension registration", () => {
       "W-001",
       "keep the name stable",
     ]);
+    // A closing quote must end its token, or an apostrophe later in the
+    // sentence would pair with it and rewrite the instruction.
+    expect(splitArguments("abort W-001 stop 'cause it's wrong")).toEqual([
+      "abort",
+      "W-001",
+      "stop",
+      "'cause",
+      "it's",
+      "wrong",
+    ]);
+  });
+
+  it("answers /intentum panel outside a TUI with the command list, not the decision list", async () => {
+    const fixture = await createTempRepository();
+    const runtime = new IntentumRuntime(fixture.repo, {
+      cacheRoot: fixture.cache,
+      workerRuntimeFactory: new ScriptedWorkerFactory(),
+      projectTrusted: true,
+    });
+    const rpc = createUiHarness(fixture.repo, "rpc");
+    try {
+      await handleIntentumCommand(runtime, "init Panel Fixture", rpc.context);
+      await handleIntentumCommand(runtime, "panel", rpc.context);
+      expect(rpc.notifications.at(-1)?.message).toContain("/intentum status");
+      expect(rpc.notifications.at(-1)?.message).not.toContain("No pending decision.");
+
+      await handleIntentumCommand(runtime, "decisions", rpc.context);
+      expect(rpc.notifications.at(-1)?.message).toBe("No pending decision.");
+    } finally {
+      await runtime.dispose();
+      await fixture.cleanup();
+    }
+  });
+
+  it("rejects an empty abort reason before showing the destructive confirmation", async () => {
+    const fixture = await createTempRepository();
+    const runtime = new IntentumRuntime(fixture.repo, {
+      cacheRoot: fixture.cache,
+      workerRuntimeFactory: new ScriptedWorkerFactory(),
+      projectTrusted: true,
+    });
+    const harness = createUiHarness(fixture.repo);
+    try {
+      await handleIntentumCommand(runtime, "init Guard Fixture", harness.context);
+      await expect(handleIntentumCommand(runtime, 'abort W-001 ""', harness.context))
+        .rejects.toThrow("usage: /intentum abort WORKER_ID reason");
+      await expect(handleIntentumCommand(runtime, 'steer W-001 ""', harness.context))
+        .rejects.toThrow("usage: /intentum steer WORKER_ID message");
+    } finally {
+      await runtime.dispose();
+      await fixture.cleanup();
+    }
   });
 
   it("renders the uninitialized no-argument welcome as one non-transcript widget", async () => {

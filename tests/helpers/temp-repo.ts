@@ -18,8 +18,19 @@ export async function createTempRepository(): Promise<TempRepository> {
   const cache = join(root, "cache");
   await Promise.all([mkdir(repo), mkdir(cache)]);
   await runFile("git", ["init", "-b", "main"], repo);
-  await runFile("git", ["config", "user.name", "intentum tests"], repo);
-  await runFile("git", ["config", "user.email", "intentum@example.invalid"], repo);
+  // Fixture git runs through runFile, which forwards HOME, so the developer's
+  // own ~/.gitconfig applies. Commit signing or a global hooksPath would fail
+  // every fixture commit and turn the whole suite red for an unrelated reason;
+  // repository-local settings override the global ones.
+  for (const [key, value] of [
+    ["user.name", "intentum tests"],
+    ["user.email", "intentum@example.invalid"],
+    ["commit.gpgsign", "false"],
+    ["tag.gpgsign", "false"],
+    ["core.hooksPath", "/dev/null"],
+  ] as const) {
+    await runFile("git", ["config", key, value], repo);
+  }
   await writeFile(join(repo, "README.md"), "# Fixture\n\nbase\n", "utf8");
   await runFile("git", ["add", "README.md"], repo);
   await runFile("git", ["commit", "-m", "fixture: initial"], repo);

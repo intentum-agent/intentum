@@ -1,6 +1,6 @@
 # Intentum 实现状态
 
-更新时间：2026-09-03
+更新时间：2026-09-04
 
 ## 结论
 
@@ -126,13 +126,13 @@ pnpm exec pi --version
 
 ## 最终验证记录
 
-2026-09-03 本轮最终串行门禁：
+2026-09-04 本轮最终串行门禁：
 
 ```text
 pnpm typecheck: PASS
-pnpm test: PASS — 16 files / 125 tests
+pnpm test: PASS — 25 files / 236 tests
 pnpm smoke:rpc: PASS — Pi 0.84.4; init/status/widget/banner PASS; modelInvoked=false
-pnpm pack:check: PASS — 72 entries; all source brand files present; requiredFiles/temporaryInstall/installedCli=PASS
+pnpm pack:check: PASS — 83 entries; all source brand files present; requiredFiles/temporaryInstall/installedCli=PASS
 intentum --help/--version and pi-intentum --version: PASS from the installed tarball
 pnpm exec pi --version: 0.84.4
 ```

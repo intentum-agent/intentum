@@ -34,7 +34,7 @@ The implementation is a real **Phase 1 + single-Worker Phase 2 controller slice*
 - explicit resume in the same Pi session, or a new recovery session if the old session file is missing;
 - restart recovery with attempt identities, same-attempt result reconciliation, full-contract recovery prompts, and durable at-least-once steering;
 - explicit, verified `--no-ff` integration with merge-abort on conflicts;
-- deterministic rejection of dirty worktrees, moved/swapped Worker identities, pre-existing Git operations, rewritten target ancestry, and Worker changes to `.intentum/**`;
+- deterministic rejection of dirty worktrees, moved/swapped Worker identities, pre-existing Git operations, rewritten target ancestry, and Worker changes to `.intentum/**` or `.pi/**`;
 - repository-scoped Controller lease plus cross-process state, contract, result, and integration locks;
 - no-follow checks for Controller paths and a fail-closed Worker sandbox preflight.
 
@@ -88,6 +88,9 @@ intentum doctor            # check Node, Git, Pi, and the Worker sandbox
 intentum init My Product   # open Pi and initialize the project
 ```
 
+The project name for `init` ends at the first option, so `intentum init My Product
+--model sonnet` names the project "My Product" and passes `--model sonnet` to Pi.
+
 `intentum init` opens Pi with Intentum loaded and runs `/intentum init` for you. From
 there the Designer conversation takes over. Later sessions just need:
 
@@ -97,8 +100,9 @@ intentum status            # print next steps, attention, work, and project deta
 intentum --model sonnet    # anything else is passed straight to pi
 ```
 
-If you installed Intentum only as a Pi package, the same commands are available inside
-Pi as `/intentum init`, `/intentum status`, and so on.
+If you installed Intentum only as a Pi package, `init` and `status` are available
+inside Pi as `/intentum init` and `/intentum status`. `doctor` is launcher-only: it
+reports on the machine before Pi starts.
 
 The `intentum` command is a thin launcher. It finds `pi` on your `PATH` (or the Pi
 package this package resolves against, or `$INTENTUM_PI`), adds `-e <package>` unless
@@ -279,7 +283,7 @@ The Worker resource loader uses `noExtensions: true`, which prevents recursive l
         └── result.json
 ```
 
-Writes to JSON state/results/contracts use a unique temporary sibling followed by `rename`. Repository-scoped file locks serialize mutations across Store instances and OS processes, while a long-lived Controller lease prevents two live Pi sessions from recovering or controlling the same repository. Every Controller-owned directory component is checked without following symlinks before locks or artifacts are created. The files may be version-controlled; controller-authored `.intentum/**` changes are excluded from target-worktree cleanliness checks, while Worker commits touching those paths are rejected.
+Writes to JSON state/results/contracts use a unique temporary sibling followed by `rename`. Repository-scoped file locks serialize mutations across Store instances and OS processes, while a long-lived Controller lease prevents two live Pi sessions from recovering or controlling the same repository. Every Controller-owned directory component is checked without following symlinks before locks or artifacts are created. The files may be version-controlled; controller-authored `.intentum/**` changes are excluded from target-worktree cleanliness checks, while Worker commits touching those paths are rejected. `.pi/**` is protected the same way: a Worker-authored Pi extension or settings file would otherwise run as host code in the next project-trusted session.
 
 Worker worktrees live at:
 

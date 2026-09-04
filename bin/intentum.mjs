@@ -145,6 +145,7 @@ async function showHelp(stdout, env) {
     "Usage:",
     "  intentum                   Open Pi in this repository with Intentum loaded",
     "  intentum init [name]       Open Pi and initialize this repository as a project",
+    "                             The name ends at the first option; later options go to pi",
     "  intentum status            Show the next step, attention, work, and project details",
     "  intentum doctor            Check Node, Git, Pi, and the Worker sandbox",
     "  intentum [pi options]      Anything else is passed to pi, e.g. --model sonnet",
@@ -276,7 +277,7 @@ function settingsPackageSources(settings) {
  */
 export async function intentumRegisteredInPi({ cwd, env = process.env } = {}) {
   const home = env.HOME ?? homedir();
-  const files = [join(home, ".pi", "agent", "settings.json"), join(cwd, ".pi", "settings.json")];
+  const files = [join(piAgentDir(env, home), "settings.json"), join(cwd, ".pi", "settings.json")];
   const ownRoot = await fsRealpath(packageRoot).catch(() => packageRoot);
   for (const file of files) {
     for (const source of settingsPackageSources(await readJsonIfPresent(file))) {
@@ -291,6 +292,13 @@ export async function intentumRegisteredInPi({ cwd, env = process.env } = {}) {
     }
   }
   return undefined;
+}
+
+/** Pi reads its global settings from PI_CODING_AGENT_DIR, else ~/.pi/agent. */
+function piAgentDir(env, home) {
+  const configured = env.PI_CODING_AGENT_DIR;
+  if (!configured) return join(home, ".pi", "agent");
+  return configured.startsWith("~") ? join(home, configured.slice(1)) : resolve(configured);
 }
 
 async function runGit(args, cwd, spawn) {
@@ -601,8 +609,13 @@ async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn }) {
   if (!registered) args.push("-e", packageRoot);
   // Pi's alternate-screen mode: the session fills the terminal, the shell's
   // earlier output stays hidden, and there is no scrollback to fall out of.
-  if (!piArgs.includes("--tui-mode")) args.push("--tui-mode", DEFAULT_TUI_MODE);
-  args.push(...piArgs);
+  // Pi only parses the space-separated form, so `--tui-mode=regular` is both
+  // normalised here and recognised as an explicit opt-out.
+  const forwarded = piArgs.flatMap((arg) => (
+    arg.startsWith("--tui-mode=") ? ["--tui-mode", arg.slice("--tui-mode=".length)] : [arg]
+  ));
+  if (!forwarded.includes("--tui-mode")) args.push("--tui-mode", DEFAULT_TUI_MODE);
+  args.push(...forwarded);
   if (initialMessage) args.push("--", initialMessage);
 
   const child = spawn(pi.command, args, { cwd, env, stdio: "inherit" });
@@ -625,11 +638,19 @@ async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn }) {
   }
 }
 
+/**
+ * Split `init` arguments into the project name and the arguments forwarded to
+ * Pi. A literal `--` is explicit; otherwise the name ends at the first
+ * option-looking token, so `intentum init My Product --model sonnet` reaches Pi
+ * as a flag instead of becoming part of the persisted project name.
+ */
 function splitPassthrough(args) {
   const separator = args.indexOf("--");
-  return separator === -1
+  if (separator !== -1) return { own: args.slice(0, separator), passthrough: args.slice(separator + 1) };
+  const firstOption = args.findIndex((arg) => arg.startsWith("-"));
+  return firstOption === -1
     ? { own: args, passthrough: [] }
-    : { own: args.slice(0, separator), passthrough: args.slice(separator + 1) };
+    : { own: args.slice(0, firstOption), passthrough: args.slice(firstOption) };
 }
 
 export async function runCli(

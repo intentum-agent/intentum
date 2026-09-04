@@ -7,7 +7,6 @@ import { Container, Text } from "@earendil-works/pi-tui";
 import type { IntentumRuntime } from "../runtime/intentum-runtime.js";
 import type { ProjectState, WorkerRecord } from "../state/schema.js";
 import { openControlPanel } from "./control-panel-host.js";
-import type { PanelTab } from "../tui/control-panel.js";
 import { renderStatusBrief } from "../tui/status-widget.js";
 import { workerStatusPresentation } from "../tui/presentation.js";
 import { singleLine } from "../tui/text-layout.js";
@@ -99,12 +98,19 @@ export async function handleIntentumCommand(
       );
       return;
     }
-    case "panel":
+    case "panel": {
+      clearIntentumWelcome(ctx.ui);
+      const { state } = await runtime.status();
+      if (ctx.mode === "tui") return openControlPanel(runtime, ctx, state, "overview");
+      // RPC/JSON/print hosts have no overlay, so the panel degrades to the same
+      // state-relevant command list that a bare `/intentum` prints there.
+      ctx.ui.notify(relevantHelp(state), "info");
+      return;
+    }
     case "decisions": {
       clearIntentumWelcome(ctx.ui);
       const { state } = await runtime.status();
-      const tab: PanelTab = command.toLowerCase() === "decisions" ? "decisions" : "overview";
-      if (ctx.mode === "tui") return openControlPanel(runtime, ctx, state, tab);
+      if (ctx.mode === "tui") return openControlPanel(runtime, ctx, state, "decisions");
       const decisions = state.pendingDecisions;
       ctx.ui.notify(
         decisions.length
@@ -131,8 +137,9 @@ export async function handleIntentumCommand(
     case "steer": {
       clearIntentumWelcome(ctx.ui);
       const [workerId, ...messageParts] = args;
-      if (!workerId || messageParts.length === 0) throw new Error("usage: /intentum steer WORKER_ID message");
-      await runtime.workers.steer(workerId, messageParts.join(" "));
+      const instruction = messageParts.join(" ").trim();
+      if (!workerId || !instruction) throw new Error("usage: /intentum steer WORKER_ID message");
+      await runtime.workers.steer(workerId, instruction);
       ctx.ui.notify(`Instruction sent or queued for ${workerId}.`, "info");
       return;
     }
@@ -167,13 +174,17 @@ export async function handleIntentumCommand(
     case "abort": {
       clearIntentumWelcome(ctx.ui);
       const [workerId, ...reasonParts] = args;
-      if (!workerId || reasonParts.length === 0) throw new Error("usage: /intentum abort WORKER_ID reason");
+      // Validate the reason before the destructive confirmation: an empty
+      // quoted argument is a real token, so a token count alone would show the
+      // dialog and only then reject the call.
+      const reason = reasonParts.join(" ").trim();
+      if (!workerId || !reason) throw new Error("usage: /intentum abort WORKER_ID reason");
       const confirmed = await ctx.ui.confirm(
         "Emergency abort",
         `Abort the current turn for ${workerId}? Session, branch, worktree, and files will be preserved.`,
       );
       if (!confirmed) return;
-      await runtime.workers.abort(workerId, reasonParts.join(" "));
+      await runtime.workers.abort(workerId, reason);
       ctx.ui.notify(`${workerId} interrupted; preserved artifacts remain available.`, "warning");
       return;
     }
@@ -330,7 +341,10 @@ function isActiveWorker(worker: WorkerRecord): boolean {
 }
 
 export function splitArguments(value: string): string[] {
-  const matches = value.match(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\S+/g) ?? [];
+  // The closing quote must end the token. Without that lookahead, `stop 'cause
+  // it's wrong` pairs `'cause it'` across a word boundary and silently rewrites
+  // the instruction that reaches the Worker.
+  const matches = value.match(/"(?:\\.|[^"\\])*"(?=\s|$)|'(?:\\.|[^'\\])*'(?=\s|$)|\S+/g) ?? [];
   return matches.map((token) => {
     if ((token.startsWith('"') && token.endsWith('"')) || (token.startsWith("'") && token.endsWith("'"))) {
       return token.slice(1, -1).replace(/\\([\\"'])/g, "$1");
