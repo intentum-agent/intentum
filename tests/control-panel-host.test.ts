@@ -11,6 +11,7 @@ import {
   openControlPanel,
   panelBodyRowsFor,
   panelSurfaceFor,
+  panelStyleFromTheme,
   panelWidthFor,
   performPanelAction,
   reducedMotionEnabled,
@@ -71,6 +72,15 @@ describe("control panel host layout", () => {
     expect(hasAnimatedWorker(state)).toBe(true);
     state.workers["W-001"]!.status = "verifying";
     expect(hasAnimatedWorker(state)).toBe(true);
+  });
+
+  it("pairs the focus background with the theme text colour so it stays readable", () => {
+    const style = panelStyleFromTheme({
+      fg: (color, text) => `<${color}>${text}</${color}>`,
+      bg: (color, text) => `[${color}]${text}[/${color}]`,
+      bold: (text) => `*${text}*`,
+    });
+    expect(style.focus("Overview")).toBe("[selectedBg]<text>*Overview*</text>[/selectedBg]");
   });
 });
 

@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { type ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { readFile } from "node:fs/promises";
 import type { IntentumRuntime } from "../runtime/intentum-runtime.js";
@@ -6,16 +6,14 @@ import type { ProjectState } from "../state/schema.js";
 import { type BrandAssets, intentumLabel, loadBrandAssets } from "./brand.js";
 import { deriveHarnessPresentation } from "./presentation.js";
 import { clipToCellWidth, singleLine } from "./text-layout.js";
+import { MAX_RECENT_SESSIONS, type RecentSession, renderWelcomeCard, WELCOME_TIPS } from "./welcome-card.js";
 
 /**
- * Session chrome: the startup header and the one-line footer that replace
- * Pi's built-in ones inside an intentum session. Everything here is pure
- * rendering; canonical state stays in the runtime.
+ * Session chrome: the startup welcome card and the one-line footer that
+ * replace Pi's built-in ones inside an intentum session. Everything here is
+ * pure rendering; canonical state stays in the runtime.
  */
 
-const LOGO_GAP = "   ";
-/** Below this many columns for the text block, the logo is dropped. */
-const MIN_TEXT_COLUMNS = 24;
 const FOOTER_GAP = 2;
 /**
  * Pi always puts one spacer row between the transcript and the editor, and
@@ -29,6 +27,11 @@ const PACKAGE_JSON_URL = new URL("../../package.json", import.meta.url);
 export interface ChromeStyle {
   bold(text: string): string;
   dim(text: string): string;
+  italic(text: string): string;
+  /** Section titles in the welcome card. */
+  accent(text: string): string;
+  /** Box edges and rules in the welcome card. */
+  border(text: string): string;
   warning(text: string): string;
   danger(text: string): string;
   /** Applied only to the logo's signal points, never to the wordmark. */
@@ -44,20 +47,13 @@ export interface DesignerWorkingIndicator {
 export const PLAIN_CHROME_STYLE: ChromeStyle = {
   bold: (text) => text,
   dim: (text) => text,
+  italic: (text) => text,
+  accent: (text) => text,
+  border: (text) => text,
   warning: (text) => text,
   danger: (text) => text,
   signal: (text) => text,
 };
-
-export interface SessionInfo {
-  readonly version: string;
-  /** Model id as Pi selects it (`--model`), or undefined when none is selected. */
-  readonly model?: string | undefined;
-  readonly thinkingLevel?: string | undefined;
-  readonly cwd: string;
-  readonly home?: string | undefined;
-  readonly unicode?: boolean | undefined;
-}
 
 export interface ContextInfo {
   readonly percent: number | null;
@@ -83,38 +79,6 @@ interface FooterToken {
 }
 
 /**
- * Header: the small logo beside three lines of session facts, in the shape
- * of a coding-agent startup card. Narrow terminals get the text alone.
- */
-export function renderHeaderLines(
-  logo: readonly string[],
-  info: SessionInfo,
-  width: number,
-  style: ChromeStyle = PLAIN_CHROME_STYLE,
-): string[] {
-  const columns = Math.max(1, Math.floor(width));
-  const text = [
-    `${style.bold("intentum")} ${style.dim(`v${info.version}`)}`,
-    style.dim(modelLabel(info.model, info.thinkingLevel)),
-    style.dim(formatCwd(info.cwd, info.home)),
-  ];
-  const logoWidth = logo.reduce((max, line) => Math.max(max, line.length), 0);
-
-  if (logo.length === 0 || columns < logoWidth + LOGO_GAP.length + MIN_TEXT_COLUMNS) {
-    return text.map((line) => truncateToWidth(line, columns, ELLIPSIS));
-  }
-
-  // Text rows sit on logo rows 1..3 so the block reads as vertically centred.
-  const firstTextRow = Math.max(0, Math.floor((logo.length - text.length) / 2));
-  const textColumns = columns - logoWidth - LOGO_GAP.length;
-  return logo.map((line, index) => {
-    const styled = colorSignalPoints(line, style.signal) + " ".repeat(logoWidth - line.length);
-    const row = text[index - firstTextRow];
-    return row === undefined ? styled.trimEnd() : `${styled}${LOGO_GAP}${truncateToWidth(row, textColumns, ELLIPSIS)}`;
-  });
-}
-
-/**
  * Footer: phase, blocking decisions, and exceptional work survive narrow
  * terminals. Identity/activity yield next; branch and context yield first.
  */
@@ -133,7 +97,7 @@ export function renderFooterLine(input: FooterInput, width: number, style: Chrom
 function footerLeft(input: FooterInput, columns: number, style: ChromeStyle): string {
   const state = input.state;
   if (!state) {
-    const text = `${intentumLabel(undefined, { unicode: input.unicode })} · no project · /intentum init`;
+    const text = `${intentumLabel(undefined, { unicode: input.unicode })} · no project · /init`;
     return style.dim(clipToCellWidth(text, columns));
   }
 
@@ -243,27 +207,10 @@ function rawFooterWidth(tokens: readonly FooterToken[], compact: boolean): numbe
 function renderFooterTokens(tokens: readonly FooterToken[], style: ChromeStyle): string {
   return tokens.map((token) => style[token.tone](token.text)).join(style.dim(" · "));
 }
-
-function modelLabel(model: string | undefined, thinkingLevel: string | undefined): string {
-  if (!model) return "no model selected";
-  const safeModel = singleLine(model);
-  const safeThinking = thinkingLevel ? singleLine(thinkingLevel) : undefined;
-  return safeThinking && safeThinking !== "off" ? `${safeModel} · ${safeThinking}` : safeModel;
-}
-
-export function formatCwd(cwd: string, home: string | undefined = process.env.HOME): string {
-  const displayed = home && (cwd === home || cwd.startsWith(`${home}/`)) ? `~${cwd.slice(home.length)}` : cwd;
-  return singleLine(displayed);
-}
-
 export function formatTokens(count: number): string {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(count % 1_000_000 === 0 ? 0 : 1)}M`;
   if (count >= 1_000) return `${Math.round(count / 1_000)}k`;
   return `${count}`;
-}
-
-function colorSignalPoints(line: string, signal: (text: string) => string): string {
-  return line.replace(/o+/g, (points) => signal(points));
 }
 
 export async function packageVersion(): Promise<string> {
@@ -354,13 +301,6 @@ export async function installSessionChrome(runtime: IntentumRuntime, ctx: Extens
     state = undefined;
   }
 
-  const session = (): Pick<SessionInfo, "model" | "thinkingLevel"> => {
-    try {
-      return { model: ctx.model?.id, thinkingLevel: ctx.thinkingLevel };
-    } catch {
-      return {};
-    }
-  };
   const contextUsage = (): ContextInfo | undefined => {
     try {
       const usage = ctx.getContextUsage();
@@ -370,13 +310,43 @@ export async function installSessionChrome(runtime: IntentumRuntime, ctx: Extens
     }
   };
 
+  // The session list reads every session file for this directory, so it must
+  // not delay the first frame: the card shows "Loading…" until it arrives.
+  let sessions: RecentSession[] | undefined;
+  let headerTui: { requestRender(): void } | undefined;
+  void recentSessions(ctx).then((list) => {
+    sessions = list;
+    headerTui?.requestRender();
+  });
+
   const logo = assets?.logoSmall ?? [];
+  const tip = WELCOME_TIPS[Math.floor(Math.random() * WELCOME_TIPS.length)] ?? "";
+  const unicode = process.env.INTENTUM_ASCII_MARK !== "1";
   try {
-    ctx.ui.setHeader((_tui, theme) => {
+    ctx.ui.setHeader((tui, theme) => {
       const style = themeStyle(theme);
+      headerTui = tui;
       return {
-        render: (width: number) => renderHeaderLines(logo, { version, ...session(), cwd: ctx.cwd }, width, style),
+        render: (width: number) => {
+          let model: { name: string; provider: string } | undefined;
+          let thinkingLevel: string | undefined;
+          try {
+            model = ctx.model ? { name: ctx.model.name, provider: ctx.model.provider } : undefined;
+            thinkingLevel = ctx.thinkingLevel;
+          } catch {
+            // A host without model state still gets the card.
+          }
+          return renderWelcomeCard(
+            logo,
+            { version, model, thinkingLevel, cwd: ctx.cwd, state, sessions, tip, unicode },
+            width,
+            style,
+          );
+        },
         invalidate() {},
+        dispose() {
+          headerTui = undefined;
+        },
       };
     });
   } catch {
@@ -432,6 +402,7 @@ export async function installSessionChrome(runtime: IntentumRuntime, ctx: Extens
     if (disposed) return;
     disposed = true;
     unsubscribeState();
+    headerTui = undefined;
     try {
       ctx.ui.setFooter(undefined);
     } catch {
@@ -446,15 +417,40 @@ export async function installSessionChrome(runtime: IntentumRuntime, ctx: Extens
   };
 }
 
+/**
+ * Newest sessions started in this directory, excluding the one being shown.
+ * Any failure (no session manager, unreadable directory) reads as "none".
+ */
+async function recentSessions(ctx: ExtensionContext): Promise<RecentSession[]> {
+  try {
+    const current = ctx.sessionManager.getSessionFile();
+    const list = await SessionManager.list(ctx.cwd, ctx.sessionManager.getSessionDir());
+    return list
+      .filter((session) => session.path !== current && session.messageCount > 0)
+      .sort((a, b) => b.modified.getTime() - a.modified.getTime())
+      .slice(0, MAX_RECENT_SESSIONS)
+      .map((session) => ({
+        title: singleLine((session.name ?? session.firstMessage).split("\n")[0] ?? "") || "(untitled)",
+        modified: session.modified,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 type ThemeLike = {
-  fg(color: "dim" | "warning" | "error", text: string): string;
+  fg(color: "accent" | "border" | "dim" | "warning" | "error", text: string): string;
   bold(text: string): string;
+  italic(text: string): string;
 };
 
 function themeStyle(theme: ThemeLike): ChromeStyle {
   return {
     bold: (text) => theme.bold(text),
     dim: (text) => theme.fg("dim", text),
+    italic: (text) => theme.italic(text),
+    accent: (text) => theme.fg("accent", text),
+    border: (text) => theme.fg("border", text),
     warning: (text) => theme.fg("warning", text),
     danger: (text) => theme.fg("error", text),
     signal: (text) => theme.fg("error", text),

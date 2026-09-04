@@ -41,7 +41,7 @@ export type PanelSurface =
   | { kind: "dialog"; columns: number; rows: number; width: number; bodyRows: number; density: "wide" | "compact" };
 
 export interface PanelStyleSource {
-  fg(color: "accent" | "dim" | "muted" | "success" | "warning" | "error" | "border", text: string): string;
+  fg(color: "accent" | "dim" | "muted" | "success" | "warning" | "error" | "border" | "text", text: string): string;
   bg(color: "selectedBg", text: string): string;
   bold(text: string): string;
 }
@@ -56,7 +56,9 @@ export function panelStyleFromTheme(theme: PanelStyleSource): PanelStyle {
     warning: (text) => theme.fg("warning", text),
     error: (text) => theme.fg("error", text),
     border: (text) => theme.fg("border", text),
-    focus: (text) => theme.bg("selectedBg", theme.bold(text)),
+    // Pair the selection background with the theme's own text colour: the
+    // terminal default foreground is not guaranteed to contrast with it.
+    focus: (text) => theme.bg("selectedBg", theme.fg("text", theme.bold(text))),
   };
 }
 

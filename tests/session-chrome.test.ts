@@ -10,8 +10,8 @@ import {
   installSessionChrome,
   reducedMotionEnabled,
   renderFooterLine,
-  renderHeaderLines,
 } from "../src/tui/session-chrome.js";
+import { relativeAge, renderWelcomeCard, type WelcomeInput } from "../src/tui/welcome-card.js";
 
 type FooterFactory = NonNullable<Parameters<ExtensionContext["ui"]["setFooter"]>[0]>;
 type LooseFooterFactory = (...args: unknown[]) => { render(width: number): string[] };
@@ -21,41 +21,125 @@ const LOGO = ["####", "#######", "    #####ooo", "    #####ooo", "#######", "###
 const MARKED: ChromeStyle = {
   bold: (text) => `<b>${text}</b>`,
   dim: (text) => `<d>${text}</d>`,
+  italic: (text) => `<i>${text}</i>`,
+  accent: (text) => `<a>${text}</a>`,
+  border: (text) => `<r>${text}</r>`,
   warning: (text) => `<w>${text}</w>`,
   danger: (text) => `<e>${text}</e>`,
   signal: (text) => `<s>${text}</s>`,
 };
 
-describe("intentum session header", () => {
-  const info = { version: "0.1.0", model: "kimi-k2.6", thinkingLevel: "medium", cwd: "/home/bobby/dev/app", home: "/home/bobby" };
+describe("intentum welcome card", () => {
+  const now = new Date("2026-09-04T12:00:00Z");
+  const info: WelcomeInput = {
+    version: "0.1.0",
+    model: { name: "Kimi K2.6", provider: "moonshot" },
+    thinkingLevel: "medium",
+    cwd: "/home/bobby/dev/app",
+    home: "/home/bobby",
+    state: undefined,
+    sessions: [],
+    tip: "short tip",
+    now,
+  };
 
-  it("lays the session card beside the small logo, in Claude Code's shape", () => {
-    expect(renderHeaderLines(LOGO, info, 100)).toEqual([
-      "####",
-      "#######        intentum v0.1.0",
-      "    #####ooo   kimi-k2.6 · medium",
-      "    #####ooo   ~/dev/app",
-      "#######",
-      "####",
-    ]);
+  it("frames identity beside tips, project, and sessions, then a tip underneath", () => {
+    const lines = renderWelcomeCard(LOGO, info, 72);
+    expect(lines[0]).toBe(`╭─ intentum v0.1.0 ${"─".repeat(52)}╮`);
+    expect(lines.at(-3)).toBe("╰──────────────────────────────────────────────────────────────────────╯");
+    expect(lines.at(-2)).toBe("");
+    expect(lines.at(-1)).toBe("Tip: short tip");
+    expect(lines.every((line) => visibleWidth(line) <= 72)).toBe(true);
+    expect(lines.slice(1, -3).every((line) => visibleWidth(line) === 72)).toBe(true);
+
+    // `│ ` + 20-column left pane + ` │ ` → the right pane starts at column 24.
+    const body = lines.slice(1, -3);
+    const left = body.map((line) => line.slice(0, 24));
+    const right = body.map((line) => line.slice(24));
+    expect(body[1]).toBe("│       Welcome!       │ /init [name]  initialize this repository      │");
+    expect(left).toContain("│         #####ooo     │");
+    expect(left).toContain("│      Kimi K2.6       │");
+    expect(left).toContain("│  moonshot · medium   │");
+    expect(right).toEqual(expect.arrayContaining([
+      " Project                                       │",
+      " No project · /init [name]                     │",
+      " ~/dev/app                                     │",
+      " Recent sessions                               │",
+      " No recent sessions                            │",
+    ]));
   });
 
-  it("drops the logo and keeps the facts in a narrow terminal", () => {
-    expect(renderHeaderLines(LOGO, info, 30)).toEqual(["intentum v0.1.0", "kimi-k2.6 · medium", "~/dev/app"]);
-    expect(renderHeaderLines(LOGO, info, 12).every((line) => visibleWidth(line) <= 12)).toBe(true);
+  it("greets a returning project with live counts and its newest sessions", () => {
+    const lines = renderWelcomeCard(LOGO, {
+      ...info,
+      state: busyState(),
+      sessions: [
+        { title: "Fix login", modified: new Date("2026-09-04T11:58:00Z") },
+        { title: "Explore repo", modified: new Date("2026-09-01T12:00:00Z") },
+      ],
+    }, 80);
+    expect(lines.some((line) => line.startsWith("│    Welcome back!     │"))).toBe(true);
+    const right = lines.map((line) => line.slice(24, -2).trimEnd());
+    expect(right).toEqual(expect.arrayContaining([
+      " Fixture Product · build 4/8 · balanced",
+      " 2 active · ⚠ 1 need attention",
+      " ◆ 1 blocking decision",
+      " 2m ago    Fix login",
+      " 3d ago    Explore repo",
+      " /panel          control panel",
+    ]));
   });
 
-  it("styles only the signal points and the wordmark", () => {
-    const lines = renderHeaderLines(LOGO, { ...info, model: undefined, thinkingLevel: undefined }, 100, MARKED);
-    expect(lines[1]).toBe("#######        <b>intentum</b> <d>v0.1.0</d>");
-    expect(lines[2]).toBe("    #####<s>ooo</s>   <d>no model selected</d>");
-    expect(lines.join("\n")).not.toContain("<s>#");
+  it("says the session list is still loading rather than empty", () => {
+    const lines = renderWelcomeCard(LOGO, { ...info, sessions: undefined }, 80);
+    expect(lines.some((line) => line.includes("Loading…"))).toBe(true);
+    expect(lines.some((line) => line.includes("No recent sessions"))).toBe(false);
+  });
+
+  it("drops the frame and keeps the facts in a narrow terminal", () => {
+    expect(renderWelcomeCard(LOGO, info, 60)).toEqual(["intentum v0.1.0", "Kimi K2.6 · medium", "~/dev/app"]);
+    expect(renderWelcomeCard(LOGO, info, 12).every((line) => visibleWidth(line) <= 12)).toBe(true);
+  });
+
+  it("wraps the tip with a hanging indent under its label", () => {
+    const tip = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen";
+    const lines = renderWelcomeCard(LOGO, { ...info, tip }, 70);
+    const tipLines = lines.slice(lines.indexOf("") + 1);
+    expect(tipLines.length).toBeGreaterThan(1);
+    expect(tipLines[0]?.startsWith("Tip: one")).toBe(true);
+    expect(tipLines.slice(1).every((line) => line.startsWith("     ") && !line.startsWith("      "))).toBe(true);
+    expect(tipLines.every((line) => visibleWidth(line) <= 70)).toBe(true);
+  });
+
+  it("styles borders, section titles, signal points, and the tip label separately", () => {
+    const joined = renderWelcomeCard(LOGO, { ...info, model: undefined }, 80, MARKED).join("\n");
+    expect(joined).toContain("<r>╭─</r> <b>intentum</b> <d>v0.1.0</d> <r>");
+    expect(joined).toContain("<a><b>Tips</b></a>");
+    expect(joined).toContain("#####<s>ooo</s>");
+    expect(joined).not.toContain("<s>#");
+    expect(joined).toContain("<d>no model selected</d>");
+    expect(joined).toContain("<i><w>Tip:</w></i> <i><d>short tip</d></i>");
+  });
+
+  it("falls back to ASCII rules and corners when box drawing is disabled", () => {
+    const lines = renderWelcomeCard(LOGO, { ...info, unicode: false }, 72);
+    expect(lines[0]?.startsWith("+- intentum v0.1.0 ---")).toBe(true);
+    expect(lines[1]?.startsWith("| ")).toBe(true);
+    expect(lines.join("\n")).not.toMatch(/[╭╮╰╯│─]/);
+  });
+
+  it("describes session age at the granularity a glance needs", () => {
+    expect(relativeAge(new Date("2026-09-04T11:59:30Z"), now)).toBe("just now");
+    expect(relativeAge(new Date("2026-09-04T11:15:00Z"), now)).toBe("45m ago");
+    expect(relativeAge(new Date("2026-09-04T03:00:00Z"), now)).toBe("9h ago");
+    expect(relativeAge(new Date("2026-08-30T12:00:00Z"), now)).toBe("5d ago");
+    expect(relativeAge(new Date("2026-07-01T12:00:00Z"), now)).toBe("2026-07-01");
   });
 });
 
 describe("intentum session footer", () => {
   it("names the missing project and the command that creates it", () => {
-    expect(renderFooterLine({ state: undefined }, 80)).toBe("⋗ intentum · no project · /intentum init");
+    expect(renderFooterLine({ state: undefined }, 80)).toBe("⋗ intentum · no project · /init");
   });
 
   it("keeps an idle project to identity, phase, and session facts", () => {
@@ -109,11 +193,19 @@ describe("intentum session footer", () => {
     expect(footer).toContain("Fixture Injected");
     expect(footer).toContain("main Injected");
     expect(footer).not.toContain("\u001b");
-    expect(renderHeaderLines(LOGO, {
+    const card = renderWelcomeCard(LOGO, {
       version: "0.1.0",
-      model: "model\nInjected",
+      model: { name: "model\nInjected", provider: "prov\u001b[31mider" },
+      thinkingLevel: "medium",
       cwd: "/tmp/project\nInjected",
-    }, 100).join("\n")).not.toContain("model\nInjected");
+      home: "/tmp",
+      state: undefined,
+      sessions: [],
+      tip: "short tip",
+    }, 100).join("\n");
+    expect(card).toContain("model Injected");
+    expect(card).toContain("~/project Injected");
+    expect(card).not.toContain("\u001b");
   });
 
   it("formats context windows the way the footer reads them", () => {
@@ -193,7 +285,7 @@ describe("installSessionChrome", () => {
       { fg: (_color: string, text: string) => text, bold: (text: string) => text },
       { onBranchChange: () => () => {}, getGitBranch: () => "main", getExtensionStatuses: () => new Map() },
     );
-    expect(footer.render(80)).toEqual(["", "⋗ intentum · no project · /intentum init" + " ".repeat(80 - 40 - 4) + "main"]);
+    expect(footer.render(80)).toEqual(["", "⋗ intentum · no project · /init" + " ".repeat(80 - 31 - 4) + "main"]);
     dispose();
   });
 

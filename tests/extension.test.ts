@@ -7,7 +7,9 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import intentumExtension from "../extensions/intentum.js";
 import {
+  INTENTUM_COMMAND_ALIASES,
   handleIntentumCommand,
+  registerIntentumCommands,
   showIntentumWelcome,
   splitArguments,
 } from "../src/tools/commands.js";
@@ -36,7 +38,10 @@ describe("intentum extension registration", () => {
     } as unknown as ExtensionAPI;
 
     intentumExtension(fake);
-    expect(commands).toEqual(["intentum"]);
+    expect(commands).toEqual(["intentum", ...INTENTUM_COMMAND_ALIASES.map((alias) => alias.name)]);
+    expect(commands).toContain("help");
+    // Pi's built-in /resume wins dispatch, so project resume is never shadowed by an alias.
+    expect(commands).not.toContain("resume");
     expect(tools).toEqual([
       "intentum_project",
       "intentum_create_work",
@@ -78,6 +83,36 @@ describe("intentum extension registration", () => {
     }
   });
 
+  it("forwards top-level aliases such as /help and /init to the /intentum handler", async () => {
+    const fixture = await createTempRepository();
+    const runtime = new IntentumRuntime(fixture.repo, {
+      cacheRoot: fixture.cache,
+      workerRuntimeFactory: new ScriptedWorkerFactory(),
+      projectTrusted: true,
+    });
+    const handlers = new Map<string, (args: string, ctx: ExtensionCommandContext) => Promise<void>>();
+    const fake = {
+      registerCommand(name: string, options: { handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> }) {
+        handlers.set(name, options.handler);
+      },
+    } as unknown as ExtensionAPI;
+    registerIntentumCommands(fake, runtime);
+    const harness = createUiHarness(fixture.repo);
+    try {
+      await handlers.get("help")?.("", harness.context);
+      expect(harness.notifications.at(-1)?.message).toContain("/init [project name]");
+
+      await handlers.get("init")?.("Alias Fixture", harness.context);
+      expect((await runtime.status()).state.projectName).toBe("Alias Fixture");
+
+      await handlers.get("steer")?.("", harness.context);
+      expect(harness.notifications.at(-1)).toEqual({ message: "usage: /steer WORKER_ID message", type: "error" });
+    } finally {
+      await runtime.dispose();
+      await fixture.cleanup();
+    }
+  });
+
   it("parses quoted command arguments without invoking a shell", () => {
     expect(splitArguments("steer W-001 \"keep the name stable\"")).toEqual([
       "steer",
@@ -107,7 +142,7 @@ describe("intentum extension registration", () => {
     try {
       await handleIntentumCommand(runtime, "init Panel Fixture", rpc.context);
       await handleIntentumCommand(runtime, "panel", rpc.context);
-      expect(rpc.notifications.at(-1)?.message).toContain("/intentum status");
+      expect(rpc.notifications.at(-1)?.message).toContain("/status");
       expect(rpc.notifications.at(-1)?.message).not.toContain("No pending decision.");
 
       await handleIntentumCommand(runtime, "decisions", rpc.context);
@@ -129,9 +164,9 @@ describe("intentum extension registration", () => {
     try {
       await handleIntentumCommand(runtime, "init Guard Fixture", harness.context);
       await expect(handleIntentumCommand(runtime, 'abort W-001 ""', harness.context))
-        .rejects.toThrow("usage: /intentum abort WORKER_ID reason");
+        .rejects.toThrow("usage: /abort WORKER_ID reason");
       await expect(handleIntentumCommand(runtime, 'steer W-001 ""', harness.context))
-        .rejects.toThrow("usage: /intentum steer WORKER_ID message");
+        .rejects.toThrow("usage: /steer WORKER_ID message");
     } finally {
       await runtime.dispose();
       await fixture.cleanup();
@@ -155,7 +190,7 @@ describe("intentum extension registration", () => {
       expect(welcomeCalls).toHaveLength(1);
       expect(harness.notifications).toHaveLength(1);
       expect(harness.notifications[0]?.message.split("\n")).toHaveLength(4);
-      expect(harness.notifications[0]?.message).toContain("/intentum init [project name]");
+      expect(harness.notifications[0]?.message).toContain("/init [project name]");
       expect(harness.notifications[0]?.message).not.toMatch(/#{4}|_{3}/);
 
       const factory = welcomeCalls[0]?.content;
@@ -407,7 +442,7 @@ describe("intentum extension registration", () => {
     const harness = createUiHarness(fixture.repo, "tui", true);
     try {
       await expect(handleIntentumCommand(runtime, "", harness.context)).resolves.toBeUndefined();
-      expect(harness.notifications.at(-1)?.message).toContain("/intentum init [project name]");
+      expect(harness.notifications.at(-1)?.message).toContain("/init [project name]");
       expect(await runtime.store.exists()).toBe(false);
     } finally {
       await runtime.dispose();

@@ -101,8 +101,8 @@ intentum --model sonnet    # anything else is passed straight to pi
 ```
 
 If you installed Intentum only as a Pi package, `init` and `status` are available
-inside Pi as `/intentum init` and `/intentum status`. `doctor` is launcher-only: it
-reports on the machine before Pi starts.
+inside Pi as `/init` and `/status` (or `/intentum init` and `/intentum status`).
+`doctor` is launcher-only: it reports on the machine before Pi starts.
 
 The `intentum` command is a thin launcher. It finds `pi` on your `PATH` (or the Pi
 package this package resolves against, or `$INTENTUM_PI`), adds `-e <package>` unless
@@ -145,7 +145,7 @@ cd /absolute/path/to/target-repository
 pi -e /absolute/path/to/intentum
 ```
 
-Then type `/intentum init My Product` inside Pi.
+Then type `/init My Product` inside Pi.
 
 The first successful initialization renders the responsive terminal lockup once,
 adjacent to the editor rather than in the scrolling transcript. Running `/intentum`
@@ -155,9 +155,15 @@ Session restore, status output, Worker cards, and later commands use only the co
 
 ### Session chrome, attention widget, and control panel
 
-In Pi's terminal mode Intentum replaces Pi's startup key hints with a small card (logo,
-`intentum vX.Y.Z`, model and thinking level, working directory) and Pi's three-line footer
-with one line: `⋗ intentum · <project> · build 4/8 · balanced` on the left, plus a worker
+In Pi's terminal mode Intentum replaces Pi's startup key hints with a welcome card: a
+framed box titled `intentum vX.Y.Z` with the logo, greeting, model and provider on the
+left and three sections on the right — state-aware tips (`/init` before a project exists,
+`/panel`, `/status`, `/steer`, `/help` after), the project line (name, phase, autonomy,
+worker and decision counts, working directory), and the three newest sessions started in
+this directory with their age. One rotating tip sits under the card. Terminals narrower
+than about 60 columns get the three facts as plain lines instead; `INTENTUM_ASCII_MARK=1`
+draws the frame with `+-|` rather than box-drawing glyphs. Pi's three-line footer becomes
+one line: `⋗ intentum · <project> · build 4/8 · balanced` on the left, plus a worker
 count, `⚠ n`, or `◆ decision` only when they apply, and the Git branch and context usage on
 the right. Above the editor nothing is shown while the project is idle; the widget appears
 only for a completed result awaiting integration, a blocked or failed Worker, or a blocking
@@ -201,7 +207,7 @@ Normal conversation remains the primary interface. The Designer inspects the exi
 
 Typical flow:
 
-1. Run `intentum init [name]`, or `/intentum init` inside Pi.
+1. Run `intentum init [name]`, or `/init` inside Pi.
 2. Confirm the repo-derived charter and approved architecture direction.
 3. The Designer submits one broad `intentum_create_work` contract.
 4. The controller creates `intentum/F-001/W-001` in an external worktree.
@@ -211,19 +217,24 @@ Typical flow:
 
 ## Commands
 
+Every action is a top-level slash command. The long form `/intentum <action>` still works
+and is the only way to reach `resume`, because Pi's built-in `/resume` (session picker)
+takes precedence over extension commands.
+
 | Command | Effect |
 | --- | --- |
-| `/intentum` | Open the control panel (overview, workers, decisions, help). Text help in RPC mode. |
-| `/intentum init [name]` | Idempotently initialize state and product artifacts. |
-| `/intentum status` | Show the current phase, autonomy, active feature, Worker, and decision summary as text. |
-| `/intentum workers` | Open the panel on the Workers tab; list Worker state as text in RPC mode. |
-| `/intentum decisions` | Open the panel on the Decisions tab; list pending decisions as text in RPC mode. |
-| `/intentum pause` | Pause project scheduling and steer a live Worker toward a safe boundary. |
+| `/intentum` or `/panel` | Open the control panel (overview, workers, decisions, help). Text help in RPC mode. |
+| `/help` | Show the commands relevant to the current project state. |
+| `/init [name]` | Idempotently initialize state and product artifacts. |
+| `/status` | Show the current phase, autonomy, active feature, Worker, and decision summary as text. |
+| `/workers` | Open the panel on the Workers tab; list Worker state as text in RPC mode. |
+| `/decisions` | Open the panel on the Decisions tab; list pending decisions as text in RPC mode. |
+| `/pause` | Pause project scheduling and steer a live Worker toward a safe boundary. |
 | `/intentum resume` | Resume project scheduling in the phase that preceded the pause. |
-| `/intentum steer W-001 message` | Send an instruction now, or queue it while paused/interrupted/blocked. |
-| `/intentum worker-resume W-001 [message]` | Explicitly resume the preserved Worker or create a recovery session. |
-| `/intentum integrate W-001` | Verify and merge a completed Worker result. Guided mode asks for confirmation. |
-| `/intentum abort W-001 reason` | Explicit emergency abort; preserve session, branch, worktree, and files. |
+| `/steer W-001 message` | Send an instruction now, or queue it while paused/interrupted/blocked. |
+| `/worker-resume W-001 [message]` | Explicitly resume the preserved Worker or create a recovery session. |
+| `/integrate W-001` | Verify and merge a completed Worker result. Guided mode asks for confirmation. |
+| `/abort W-001 reason` | Explicit emergency abort; preserve session, branch, worktree, and files. |
 
 ## Terminal brand and companion command
 

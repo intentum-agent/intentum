@@ -30,18 +30,50 @@ export interface IntentumCommandPresentation {
 
 const runtimePresentations = new WeakMap<IntentumRuntime, IntentumCommandPresentation>();
 
+/**
+ * Top-level slash commands that forward to the same `/intentum <action>` handler,
+ * so users type `/help` or `/status` instead of `/intentum help`.
+ *
+ * `resume` is deliberately absent: Pi ships a built-in `/resume` (session picker)
+ * that wins dispatch and would only produce a startup conflict warning. Project
+ * resume stays reachable as `/intentum resume`.
+ */
+export const INTENTUM_COMMAND_ALIASES: ReadonlyArray<{ name: string; description: string; argumentHint?: string }> = [
+  { name: "init", description: "Initialize the intentum project state and product artifacts", argumentHint: "[project name]" },
+  { name: "help", description: "Show the intentum commands relevant to the current project state" },
+  { name: "status", description: "Show the current intentum phase, autonomy, feature, Worker, and decision summary" },
+  { name: "panel", description: "Open the intentum control panel" },
+  { name: "workers", description: "Open the intentum control panel on the Workers tab" },
+  { name: "decisions", description: "Open the intentum control panel on the Decisions tab" },
+  { name: "pause", description: "Pause intentum project scheduling at the next safe point" },
+  { name: "steer", description: "Send an instruction to an intentum Worker", argumentHint: "WORKER_ID message" },
+  { name: "worker-resume", description: "Resume a preserved intentum Worker", argumentHint: "WORKER_ID [message]" },
+  { name: "integrate", description: "Verify and merge a completed intentum Worker result", argumentHint: "WORKER_ID" },
+  { name: "abort", description: "Emergency-abort an intentum Worker turn, preserving its artifacts", argumentHint: "WORKER_ID reason" },
+];
+
 export function registerIntentumCommands(pi: ExtensionAPI, runtimeSource: IntentumRuntimeSource): void {
+  const dispatch = async (rawArgs: string, ctx: ExtensionCommandContext) => {
+    try {
+      const runtime = resolveRuntime(runtimeSource);
+      await handleIntentumCommand(runtime, rawArgs, ctx);
+    } catch (error) {
+      ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+    }
+  };
+
   pi.registerCommand("intentum", {
     description: "Open the intentum control panel, or init, inspect, pause, resume, steer, and integrate the project",
-    handler: async (rawArgs, ctx) => {
-      try {
-        const runtime = resolveRuntime(runtimeSource);
-        await handleIntentumCommand(runtime, rawArgs, ctx);
-      } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
-      }
-    },
+    handler: dispatch,
   });
+
+  for (const alias of INTENTUM_COMMAND_ALIASES) {
+    pi.registerCommand(alias.name, {
+      description: alias.description,
+      ...(alias.argumentHint ? { argumentHint: alias.argumentHint } : {}),
+      handler: (rawArgs, ctx) => dispatch(`${alias.name} ${rawArgs}`.trim(), ctx),
+    });
+  }
 }
 
 /**
@@ -138,7 +170,7 @@ export async function handleIntentumCommand(
       clearIntentumWelcome(ctx.ui);
       const [workerId, ...messageParts] = args;
       const instruction = messageParts.join(" ").trim();
-      if (!workerId || !instruction) throw new Error("usage: /intentum steer WORKER_ID message");
+      if (!workerId || !instruction) throw new Error("usage: /steer WORKER_ID message");
       await runtime.workers.steer(workerId, instruction);
       ctx.ui.notify(`Instruction sent or queued for ${workerId}.`, "info");
       return;
@@ -146,7 +178,7 @@ export async function handleIntentumCommand(
     case "worker-resume": {
       clearIntentumWelcome(ctx.ui);
       const [workerId, ...messageParts] = args;
-      if (!workerId) throw new Error("usage: /intentum worker-resume WORKER_ID [message]");
+      if (!workerId) throw new Error("usage: /worker-resume WORKER_ID [message]");
       runtime.setWorkerSessionDefaults(ctx);
       await runtime.workers.resume(workerId, messageParts.join(" ") || undefined);
       ctx.ui.notify(`Resuming ${workerId} in its preserved Pi session and worktree.`, "info");
@@ -155,7 +187,7 @@ export async function handleIntentumCommand(
     case "integrate": {
       clearIntentumWelcome(ctx.ui);
       const [workerId] = args;
-      if (!workerId) throw new Error("usage: /intentum integrate WORKER_ID");
+      if (!workerId) throw new Error("usage: /integrate WORKER_ID");
       const { state } = await runtime.status();
       if (state.autonomy === "guided") {
         const confirmed = await ctx.ui.confirm(
@@ -178,7 +210,7 @@ export async function handleIntentumCommand(
       // quoted argument is a real token, so a token count alone would show the
       // dialog and only then reject the call.
       const reason = reasonParts.join(" ").trim();
-      if (!workerId || !reason) throw new Error("usage: /intentum abort WORKER_ID reason");
+      if (!workerId || !reason) throw new Error("usage: /abort WORKER_ID reason");
       const confirmed = await ctx.ui.confirm(
         "Emergency abort",
         `Abort the current turn for ${workerId}? Session, branch, worktree, and files will be preserved.`,
@@ -307,30 +339,30 @@ export function clearIntentumWelcome(ui: Pick<ExtensionUIContext, "setWidget">):
 
 function uninitializedHelp(): string {
   return [
-    "/intentum init [project name]",
+    "/init [project name]",
     "Describe the target users and primary outcome in normal conversation.",
     "Share constraints and non-goals in normal conversation.",
-    "/intentum help",
+    "/help",
   ].join("\n");
 }
 
 function relevantHelp(state: ProjectState): string {
   const workers = Object.values(state.workers);
-  const lines = ["/intentum  (control panel)", "/intentum status", "/intentum workers"];
-  if (state.pendingDecisions.length) lines.push("/intentum decisions");
+  const lines = ["/intentum  (control panel)", "/status", "/workers"];
+  if (state.pendingDecisions.length) lines.push("/decisions");
 
   if (state.phase === "paused" || state.schedulerPaused) {
     lines.push("/intentum resume");
   } else {
-    lines.push("/intentum pause");
+    lines.push("/pause");
   }
 
   const resumable = workers.find((worker) => worker.status === "paused" || worker.status === "interrupted");
   const completed = workers.find((worker) => worker.status === "completed");
   const active = workers.find(isActiveWorker);
-  if (resumable) lines.push(`/intentum worker-resume ${resumable.id} [message]`);
-  if (completed) lines.push(`/intentum integrate ${completed.id}`);
-  if (active) lines.push(`/intentum steer ${active.id} message`);
+  if (resumable) lines.push(`/worker-resume ${resumable.id} [message]`);
+  if (completed) lines.push(`/integrate ${completed.id}`);
+  if (active) lines.push(`/steer ${active.id} message`);
 
   lines.push("Use normal conversation for product decisions and new Worker outcomes.");
   return lines.slice(0, 8).join("\n");
