@@ -33,7 +33,7 @@ function captureStream(columns?: number, isTTY = false): CaptureStream {
 
 async function renderAt(columns?: number, color = false): Promise<string[]> {
   const stdout = captureStream(columns, color);
-  const env = color ? { FORCE_COLOR: "1" } : { NO_COLOR: "1" };
+  const env = { ...(color ? { FORCE_COLOR: "1" } : { NO_COLOR: "1" }), INTENTUM_SYMBOLS: "unicode" };
   return renderBrand({ stdout, env });
 }
 
@@ -45,7 +45,7 @@ describe("intentum terminal brand", () => {
   it("stays byte-for-byte aligned with the Pi TUI renderer at every layout boundary", async () => {
     for (const columns of [113, 112, 58, 57, 21, 20, 12, 11, 9]) {
       await expect(renderAt(columns)).resolves.toEqual(
-        await renderBrandLines({ columns, unicode: true }),
+        await renderBrandLines({ columns, symbols: "unicode" }),
       );
     }
   });
@@ -99,12 +99,19 @@ describe("intentum terminal brand", () => {
     ))).toBe(true);
   });
 
-  it("supports an explicit ASCII fallback for the compact prompt mark", async () => {
-    const stdout = captureStream(11);
+  it("uses the resolved glyph preset for the compact prompt mark", async () => {
     await expect(renderBrand({
-      stdout,
-      env: { NO_COLOR: "1", INTENTUM_ASCII_MARK: "1" },
+      stdout: captureStream(11),
+      env: { NO_COLOR: "1", INTENTUM_SYMBOLS: "ascii" },
     })).resolves.toEqual([">• intentum"]);
+    await expect(renderBrand({
+      stdout: captureStream(11),
+      env: { NO_COLOR: "1", INTENTUM_SYMBOLS: "nerd" },
+    })).resolves.toEqual(["\u{F08C9} intentum"]);
+    await expect(renderBrand({
+      stdout: captureStream(11),
+      env: { NO_COLOR: "1", TERM_PROGRAM: "ghostty" },
+    })).resolves.toEqual(["\u{F08C9} intentum"]);
   });
 });
 

@@ -1,8 +1,7 @@
 import { readFile } from "node:fs/promises";
+import { SYMBOL_SETS, type SymbolPreset, symbolPreset } from "./symbols.mjs";
 
 export const BRAND_WIDGET_KEY = "intentum-welcome";
-export const INTENTUM_GLYPH = "⋗";
-export const INTENTUM_GLYPH_FALLBACK = ">•";
 export const SIGNAL_RED_LIGHT = "#E8302A";
 export const SIGNAL_RED_DARK = "#FF5148";
 
@@ -57,8 +56,8 @@ export interface BrandFrame {
 export interface BrandRenderOptions {
   /** Defaults to process.stdout.columns, then 80 when the width is unavailable. */
   readonly columns?: number | null;
-  /** Select the documented >• fallback when the terminal font lacks ⋗. */
-  readonly unicode?: boolean | undefined;
+  /** Glyph preset for the label layout's mark; defaults to the process preset. */
+  readonly symbols?: SymbolPreset | undefined;
   /** Optional point-only styling for renderBrandLines(). */
   readonly colorSignal?: (text: string) => string;
 }
@@ -92,14 +91,24 @@ export function selectBrandLayout(
  */
 export function intentumLabel(
   projectName?: string,
-  options: { readonly unicode?: boolean | undefined } = {},
+  options: { readonly symbols?: SymbolPreset | undefined } = {},
 ): string {
-  const unicode = options.unicode ?? (process.env.INTENTUM_ASCII_MARK !== "1");
-  const glyph = unicode ? INTENTUM_GLYPH : INTENTUM_GLYPH_FALLBACK;
-  const base = `${glyph} ${PLAIN_WORDMARK}`;
+  const base = `${SYMBOL_SETS[options.symbols ?? symbolPreset()].mark} ${PLAIN_WORDMARK}`;
   // A project named after the tool itself would read "intentum · intentum".
   if (!projectName || projectName.trim().toLowerCase() === PLAIN_WORDMARK) return base;
   return `${base} · ${projectName}`;
+}
+
+/**
+ * Footer identity: the mark beside the project name, or beside the wordmark
+ * when the project has no other name.
+ */
+export function intentumMark(
+  projectName?: string,
+  options: { readonly symbols?: SymbolPreset | undefined } = {},
+): string {
+  const name = projectName?.trim();
+  return `${SYMBOL_SETS[options.symbols ?? symbolPreset()].mark} ${name && name.toLowerCase() !== PLAIN_WORDMARK ? name : PLAIN_WORDMARK}`;
 }
 
 /**
@@ -141,7 +150,7 @@ export function renderBrandFrameFromAssets(
   const layout = selectBrandLayout(columns, widths);
 
   if (layout === "label") {
-    const label = intentumLabel(undefined, { unicode: options.unicode });
+    const label = intentumLabel(undefined, { symbols: options.symbols });
     const lines = [sliceToColumns(label, columns)];
     return frame(layout, columns, lines, [[]]);
   }
@@ -203,7 +212,7 @@ function frame(
   lines: readonly string[],
   signalSpans: readonly (readonly SignalSpan[])[],
 ): BrandFrame {
-  if (lines.some((line) => line.length > columns)) {
+  if (lines.some((line) => cellCount(line) > columns)) {
     throw new Error(`Brand layout ${layout} does not fit ${columns} columns`);
   }
   return {
@@ -248,7 +257,18 @@ function findPointSpans(lines: readonly string[], pointCharacter: "o" | "@"): Si
 }
 
 function maxWidth(lines: readonly string[]): number {
-  return lines.reduce((maximum, line) => Math.max(maximum, line.length), 0);
+  return lines.reduce((maximum, line) => Math.max(maximum, cellCount(line)), 0);
+}
+
+/**
+ * Terminal cells of a brand line. Artwork is 7-bit ASCII and every mark glyph
+ * is single-cell, so counting code points is exact; the Nerd Font mark is a
+ * surrogate pair, which `String#length` would count twice.
+ */
+function cellCount(line: string): number {
+  let count = 0;
+  for (const _ of line) count += 1;
+  return count;
 }
 
 function sliceToColumns(value: string, columns: number): string {

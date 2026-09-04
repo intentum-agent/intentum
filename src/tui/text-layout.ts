@@ -27,6 +27,27 @@ export function clipToCellWidth(value: string, maximum: number, ellipsis = ELLIP
   return `${takeGraphemes(value, contentWidth)}${boundedEllipsis}`;
 }
 
+/** Clip plain text by terminal cells keeping the tail, the way a path stays recognisable. */
+export function clipHeadToCellWidth(value: string, maximum: number, ellipsis = ELLIPSIS): string {
+  const width = Math.max(0, Math.floor(maximum));
+  if (width === 0) return "";
+  if (visibleWidth(value) <= width) return value;
+
+  const boundedEllipsis = takeGraphemes(ellipsis, width);
+  const contentWidth = Math.max(0, width - visibleWidth(boundedEllipsis));
+  const graphemes = Array.from(GRAPHEME_SEGMENTER.segment(value), ({ segment }) => segment);
+  let kept = "";
+  let keptWidth = 0;
+  for (let index = graphemes.length - 1; index >= 0; index--) {
+    const grapheme = graphemes[index] as string;
+    const graphemeWidth = visibleWidth(grapheme);
+    if (keptWidth + graphemeWidth > contentWidth) break;
+    kept = grapheme + kept;
+    keptWidth += graphemeWidth;
+  }
+  return `${boundedEllipsis}${kept}`;
+}
+
 /** Collapse to one line, then clip by terminal cell width. */
 export function clipSingleLine(value: string, maximum: number, ellipsis = ELLIPSIS): string {
   return clipToCellWidth(singleLine(value), maximum, ellipsis);

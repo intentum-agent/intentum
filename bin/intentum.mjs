@@ -6,6 +6,8 @@ import { constants as fsConstants, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { detectNerdFont, installSymbolsFont, SYMBOLS_FONT_URL } from "../src/tui/nerd-font.mjs";
+import { explicitSymbolPreset, resolveSymbolPreset, SYMBOL_SETS } from "../src/tui/symbols.mjs";
 
 const DEFAULT_COLUMNS = 80;
 const BIG_BANNER_COLUMNS = 113;
@@ -104,9 +106,10 @@ async function loadSmallLogo(enabled) {
 /**
  * Render the terminal brand from the shipped ASCII source files.
  * The optional stream/env arguments keep the executable testable without
- * changing the production process.stdout.columns selection rule.
+ * changing the production process.stdout.columns selection rule; `symbols`
+ * is the resolved glyph preset for the narrowest, label-only layout.
  */
-export async function renderBrand({ stdout = process.stdout, env = process.env } = {}) {
+export async function renderBrand({ stdout = process.stdout, env = process.env, symbols } = {}) {
   const columns = terminalColumns(stdout);
   const enabled = colorEnabled(stdout, env);
 
@@ -115,8 +118,8 @@ export async function renderBrand({ stdout = process.stdout, env = process.env }
   if (columns >= COMPACT_LOGO_COLUMNS) return loadCompactLogo(enabled);
   if (columns >= SMALL_LOGO_COLUMNS) return loadSmallLogo(enabled);
 
-  const promptMark = env.INTENTUM_ASCII_MARK === "1" ? ">•" : "⋗";
-  return [`${promptMark} intentum`.slice(0, columns)];
+  const label = `${mark(symbols ?? await resolveSymbolPreset({ env }))} intentum`;
+  return [Array.from(label).slice(0, columns).join("")];
 }
 
 async function packageVersion() {
@@ -131,12 +134,13 @@ function writeLines(stream, lines) {
   stream.write(`${lines.join("\n")}\n`);
 }
 
-function mark(env) {
-  return env.INTENTUM_ASCII_MARK === "1" ? ">•" : "⋗";
+/** The brand mark for a resolved glyph preset. */
+function mark(symbols) {
+  return SYMBOL_SETS[symbols].mark;
 }
 
-async function showHelp(stdout, env) {
-  const brand = await renderBrand({ stdout, env });
+async function showHelp(stdout, env, symbols) {
+  const brand = await renderBrand({ stdout, env, symbols });
   writeLines(stdout, [
     ...brand,
     "",
@@ -147,7 +151,8 @@ async function showHelp(stdout, env) {
     "  intentum init [name]       Open Pi and initialize this repository as a project",
     "                             The name ends at the first option; later options go to pi",
     "  intentum status            Show the next step, attention, work, and project details",
-    "  intentum doctor            Check Node, Git, Pi, and the Worker sandbox",
+    "  intentum doctor            Check Node, Git, Pi, the Worker sandbox, and fonts",
+    "  intentum fonts install     Install the Nerd Font symbols the status line icons use",
     "  intentum [pi options]      Anything else is passed to pi, e.g. --model sonnet",
     "  intentum --tui-mode regular  Keep Pi's inline mode instead of the fullscreen default",
     "",
@@ -163,9 +168,9 @@ async function showHelp(stdout, env) {
   ]);
 }
 
-async function showVersion(stdout, env) {
+async function showVersion(stdout, env, symbols) {
   const [brand, version] = await Promise.all([
-    renderBrand({ stdout, env }),
+    renderBrand({ stdout, env, symbols }),
     packageVersion(),
   ]);
   writeLines(stdout, [...brand, "", `intentum v${version}`]);
@@ -455,9 +460,9 @@ function statusNextStep(state, workers, decisions) {
   return "Describe the next outcome in chat; the Designer will turn it into focused work.";
 }
 
-async function showStatus({ stdout, stderr, env, cwd }) {
+async function showStatus({ stdout, stderr, cwd, symbols }) {
   const { exists, path, state, error } = await readProjectState(cwd);
-  const prefix = mark(env);
+  const prefix = mark(symbols);
   if (!exists) {
     stderr.write([
       `${prefix} intentum · no project in ${plainStatusText(cwd, "this directory")}`,
@@ -515,7 +520,7 @@ function checkLine(status, label, detail) {
   return `  ${icon} ${label.padEnd(16)} ${detail}`;
 }
 
-async function runDoctor({ stdout, env, cwd, spawn, platform, nodeVersion }) {
+async function runDoctor({ stdout, env, cwd, spawn, platform, nodeVersion, symbols }) {
   const lines = [];
   let failures = 0;
   let warnings = 0;
@@ -566,12 +571,15 @@ async function runDoctor({ stdout, env, cwd, spawn, platform, nodeVersion }) {
   else if (project.error) note("fail", "Project", `${project.path} is unreadable: ${project.error}`);
   else note("ok", "Project", `${project.state.projectName ?? "unnamed"} · ${project.state.phase ?? "unknown"} phase`);
 
+  const font = await nerdFontStatus(env, platform);
+  note(font.status, "Nerd Font", font.detail);
+
   const summary = failures
     ? `${failures} problem${failures === 1 ? "" : "s"} to fix before running intentum.`
     : warnings
       ? "Ready to start. Warnings above limit what Workers can do on this machine."
       : "Everything looks good.";
-  writeLines(stdout, [`${mark(env)} intentum doctor`, "", ...lines, "", summary]);
+  writeLines(stdout, [`${mark(symbols)} intentum doctor`, "", ...lines, "", summary]);
   return failures ? 1 : 0;
 }
 
@@ -582,7 +590,53 @@ function waitForExit(child) {
   });
 }
 
-async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn }) {
+/**
+ * Whether the status line can use Nerd Font icons here. An explicit
+ * INTENTUM_SYMBOLS is honoured as-is; otherwise the icons follow detection.
+ */
+async function nerdFontStatus(env, platform) {
+  const explicit = env.INTENTUM_SYMBOLS?.trim().toLowerCase();
+  if (explicit === "nerd" || explicit === "unicode" || explicit === "ascii") {
+    return { status: "ok", detail: `${explicit} glyphs (INTENTUM_SYMBOLS)` };
+  }
+  const source = await detectNerdFont({ env, platform });
+  if (source?.kind === "terminal") return { status: "ok", detail: `${source.name} bundles the symbols; icons enabled` };
+  if (source) return { status: "ok", detail: `${source.path}; icons enabled` };
+  return {
+    status: "info",
+    detail: "not found; the status line uses plain glyphs. Run `intentum fonts install` for icons, or set INTENTUM_SYMBOLS=unicode to keep them",
+  };
+}
+
+async function runFonts({ stdout, stderr, env, platform, fetch: fetchImpl, symbols }, rest) {
+  const [action = ""] = rest;
+  if (action !== "install") {
+    const font = await nerdFontStatus(env, platform);
+    writeLines(stdout, [
+      `${mark(symbols)} intentum fonts`,
+      "",
+      checkLine(font.status, "Nerd Font", font.detail),
+      "",
+      "  intentum fonts install     Install Symbols Nerd Font Mono for this user",
+      `  Source: ${SYMBOLS_FONT_URL}`,
+    ]);
+    return action === "" ? 0 : 1;
+  }
+  try {
+    const { path, installed } = await installSymbolsFont({ env, platform, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
+    writeLines(stdout, [
+      installed ? `${mark(symbols)} installed ${path}` : `${mark(symbols)} already installed: ${path}`,
+      "Open a new terminal window so it picks the font up. Terminals fall back to it for icon",
+      "glyphs on their own; Kitty users add it with symbol_map if the icons still show as boxes.",
+    ]);
+    return 0;
+  } catch (error) {
+    stderr.write(`${mark(symbols)} intentum fonts: ${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
+}
+
+async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn, symbols }) {
   const pi = await locatePi({ env });
   if (!pi) {
     stderr.write([
@@ -601,8 +655,11 @@ async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn }) {
   else if (!repo.atRoot) hints.push(`starting from a subdirectory; Intentum manages the repository root ${repo.root}. Run it from there.`);
   else if (!repo.hasHead) hints.push("this repository has no commits yet; make a first commit before starting a Worker.");
   else if (!repo.branch) hints.push("HEAD is detached; check out a named branch before starting a Worker.");
+  if (symbols !== "nerd" && !explicitSymbolPreset(env)) {
+    hints.push("no Nerd Font found, so the status line uses plain glyphs. `intentum fonts install` adds the icons; INTENTUM_SYMBOLS=unicode silences this.");
+  }
   // Platform limits are reported by `intentum doctor`, not on every launch.
-  for (const hint of hints) stderr.write(`${mark(env)} intentum: ${hint}\n`);
+  for (const hint of hints) stderr.write(`${mark(symbols)} intentum: ${hint}\n`);
 
   const registered = await intentumRegisteredInPi({ cwd, env });
   const args = [...pi.args];
@@ -663,21 +720,25 @@ export async function runCli(
     spawn = nodeSpawn,
     platform = process.platform,
     nodeVersion = process.version,
+    fetch: fetchImpl = undefined,
   } = {},
 ) {
   const [first = "", ...rest] = argv;
-  const context = { stdout, stderr, env, cwd, spawn, platform, nodeVersion };
+  // One detection per run: every surface, from hints to `doctor`, shows the same mark.
+  const symbols = await resolveSymbolPreset({ env, platform });
+  const context = { stdout, stderr, env, cwd, spawn, platform, nodeVersion, fetch: fetchImpl, symbols };
 
   if (["-h", "--help", "help"].includes(first)) {
-    await showHelp(stdout, env);
+    await showHelp(stdout, env, symbols);
     return 0;
   }
   if (["-v", "-V", "--version", "version"].includes(first)) {
-    await showVersion(stdout, env);
+    await showVersion(stdout, env, symbols);
     return 0;
   }
   if (first === "status") return showStatus(context);
   if (first === "doctor") return runDoctor(context);
+  if (first === "fonts") return runFonts(context, rest);
   if (first === "init") {
     const { own, passthrough } = splitPassthrough(rest);
     const name = own.join(" ").trim();

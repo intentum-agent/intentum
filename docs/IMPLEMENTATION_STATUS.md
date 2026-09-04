@@ -46,6 +46,7 @@
 13. 从 `brand/ascii/` 读取的响应式、一次性欢迎 Banner；Pi TUI 每行 `Text` 渲染；Signal point 精确着色；RPC 使用可序列化行且 restore 不重放。
 14. `intentum` 启动器（launch/init/status/doctor，见 `tests/cli-launcher.test.ts`）、`--help/--version`、品牌资源发布白名单、真实 tarball 离线安装与已安装 `intentum`/`pi-intentum` bin 执行门禁。
 15. 统一 `HarnessPresentationModel`、主题感知 attention widget、优先级 footer，以及 `/intentum` command center（Overview/Workers/Decisions/Help）。Fullscreen 临时覆盖 viewport：≥100×22 双栏、≥60×16 单栏，更小尺寸降级为纯文本状态；regular 模式使用居中面板与整行 SGR 鼠标命中。面板具备视口安全焦点、操作中/成功/错误反馈、reduced-motion、懒加载且证据优先的 Worker details；决策仍只草拟到 editor。见 `src/tui/presentation.ts`、`src/tui/control-panel.ts`、`src/tools/control-panel-host.ts`。
+16. 分段式 status line footer：icon 引导的 segment 以 `·` 相连，左侧为 `⋗ <project>`、host、model、cwd（OSC 8 链接）、Git 分支与 `*unstaged +staged ?untracked` 计数、session id 与 Intentum 自身的 phase/decision/attention/active/review/paused/autonomy，右侧为 tokens in/out、cost、context 使用率与窗口；essential segment 永远保留，其余按优先级让位。`INTENTUM_SYMBOLS=nerd|unicode|ascii` 选择字形集（取代原 `INTENTUM_ASCII_MARK`）；未设置时检测到 Nerd Font（用户/系统字体目录中的 `*NerdFont*` 文件，或 Ghostty/WezTerm 内置符号）即用 nerd，否则 unicode。`intentum fonts install` 下载校验过的 Symbols Nerd Font Mono 到用户字体目录；`doctor` 与启动提示报告字体状态。见 `src/tui/session-chrome.ts`、`src/tui/symbols.ts`、`src/tui/nerd-font.mjs`、`src/git/status.ts`。
 
 ## 关键不变量
 

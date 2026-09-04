@@ -122,6 +122,14 @@ text stays on one line without truncating CJK text or emoji.
 warns that Workers cannot start because the sandbox requires Linux with Bubblewrap.
 Designer conversation, `init`, charter, and architecture work everywhere.
 
+`intentum fonts install` downloads Symbols Nerd Font Mono (pinned release, checksum
+verified) into your user font directory — `~/Library/Fonts` on macOS,
+`$XDG_DATA_HOME/fonts` (default `~/.local/share/fonts`, then `fc-cache`) on Linux — so
+the status line can use the same icons as Oh My Pi. It never runs during `npm install`:
+package managers block lifecycle scripts, and a font download that writes into your
+home directory should be a command you ran on purpose. `intentum fonts` shows whether a
+Nerd Font is already reachable; `doctor` reports the same line.
+
 ## Development checkout
 
 Install the locked development dependencies:
@@ -151,7 +159,8 @@ The first successful initialization renders the responsive terminal lockup once,
 adjacent to the editor rather than in the scrolling transcript. Running `/intentum`
 without arguments in an uninitialized repository shows the same one-time welcome.
 Session restore, status output, Worker cards, and later commands use only the compact
-`⋗ intentum` identity.
+`⋗ intentum` identity. The mark follows the glyph preset: with a Nerd Font it is the
+bullseye-arrow icon (`U+F08C9`), otherwise `⋗`, and `>•` under `INTENTUM_SYMBOLS=ascii`.
 
 ### Session chrome, attention widget, and control panel
 
@@ -161,12 +170,32 @@ left and three sections on the right — state-aware tips (`/init` before a proj
 `/panel`, `/status`, `/steer`, `/help` after), the project line (name, phase, autonomy,
 worker and decision counts, working directory), and the three newest sessions started in
 this directory with their age. One rotating tip sits under the card. Terminals narrower
-than about 60 columns get the three facts as plain lines instead; `INTENTUM_ASCII_MARK=1`
-draws the frame with `+-|` rather than box-drawing glyphs. Pi's three-line footer becomes
-one line: `⋗ intentum · <project> · build 4/8 · balanced` on the left, plus a worker
-count, `⚠ n`, or `◆ decision` only when they apply, and the Git branch and context usage on
-the right. Above the editor nothing is shown while the project is idle; the widget appears
-only for a completed result awaiting integration, a blocked or failed Worker, or a blocking
+than about 60 columns get the three facts as plain lines instead; `INTENTUM_SYMBOLS=ascii`
+draws the frame with `+-|` rather than box-drawing glyphs.
+
+Pi's three-line footer becomes one status line of icon-led segments joined by `·`, in the
+shape of a modern coding-agent status bar. Left: `⋗ <project>`, host, model and thinking
+level, working directory (an OSC 8 link the terminal can open, clipped from the front),
+Git branch with `*unstaged +staged ?untracked` counts, session id, then Intentum's own
+facts — `⚑ BUILD 4/8`, `◆ n decisions`, `⚠ n attention`, `● n active`, `✓ n review`,
+`○ n paused`, `⚙ <autonomy>` — and any status other extensions publish. Right: tokens in,
+tokens out, session cost, context usage (`6.1%/272K`, coloured by pressure) and the
+context window. Phase, blocking decisions, and exceptional work always survive a narrow
+terminal; every other segment yields by priority (host and context total first, Git and
+context pressure last) until the line fits. Working-tree counts come from `git status`,
+refreshed at most every three seconds while the footer repaints.
+
+`INTENTUM_SYMBOLS` selects the glyph set: `nerd` (Nerd Font icons, the same code points
+Oh My Pi's status line uses), `unicode` (single-cell glyphs any modern font carries), or
+`ascii` (`in:`, `out:`, `ctx:`, `@` branch, `>•` mark; also plain box rules in the
+welcome card). When it is unset Intentum picks `nerd` if a Nerd Font is installed
+(any `*NerdFont*.ttf` under the user or system font directories) or the terminal bundles
+the symbols (Ghostty, WezTerm), and `unicode` otherwise, so nobody sees boxes by
+default. The launcher says so once per start until you run `intentum fonts install` or
+set the variable.
+
+Above the editor nothing is shown while the project is idle; the widget appears only for
+a completed result awaiting integration, a blocked or failed Worker, or a blocking
 decision. Everything else lives in the control panel.
 
 Pi's own `[Skills]`, `[Prompts]`, and `[Extensions]` listing is printed by Pi, not by
@@ -251,9 +280,9 @@ measures the checked-in assets and selects a layout from `process.stdout.columns
 | `< 12` | compact `⋗ intentum`, clipped only when the terminal is narrower than the label |
 
 An unknown width is treated as 80 columns. Only the `o`/`@` Signal point cells are
-colored; the arms and wordmark keep the terminal's default foreground. Set
-`INTENTUM_ASCII_MARK=1` when the terminal font does not contain `⋗`; the compact mark
-then uses `>•`.
+colored; the arms and wordmark keep the terminal's default foreground. The compact
+mark is the Nerd Font icon when one is detected or `INTENTUM_SYMBOLS=nerd` is set, `⋗`
+under `unicode`, and `>•` under `ascii` for fonts that render neither.
 
 `intentum --help` and `intentum --version` show the lockup. `pi-intentum` is the
 historical companion name and runs the same executable.

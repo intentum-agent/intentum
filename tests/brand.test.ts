@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ansi31,
-  INTENTUM_GLYPH,
-  INTENTUM_GLYPH_FALLBACK,
   intentumLabel,
   loadBrandAssets,
   normalizeTerminalColumns,
@@ -88,18 +86,25 @@ describe("terminal brand renderer", () => {
     expect(styled.join("\n").replaceAll(/\u001b\[(?:31|39)m/g, "")).toBe(brandFrame.lines.join("\n"));
   });
 
-  it("provides the compact post-banner identity and documented glyph fallback", async () => {
-    expect(intentumLabel()).toBe(`${INTENTUM_GLYPH} intentum`);
-    expect(intentumLabel("my-app")).toBe(`${INTENTUM_GLYPH} intentum · my-app`);
-    expect(intentumLabel("intentum")).toBe(`${INTENTUM_GLYPH} intentum`);
-    expect(intentumLabel("my-app", { unicode: false })).toBe(`${INTENTUM_GLYPH_FALLBACK} intentum · my-app`);
+  it("provides the compact post-banner identity in every glyph preset", async () => {
+    expect(intentumLabel()).toBe("⋗ intentum");
+    expect(intentumLabel("my-app")).toBe("⋗ intentum · my-app");
+    expect(intentumLabel("intentum")).toBe("⋗ intentum");
+    expect(intentumLabel("my-app", { symbols: "ascii" })).toBe(">• intentum · my-app");
+    expect(intentumLabel("my-app", { symbols: "nerd" })).toBe("\u{F08C9} intentum · my-app");
 
-    expect((await renderBrandFrame({ columns: 11 })).lines).toEqual([`${INTENTUM_GLYPH} intentum`]);
-    expect((await renderBrandFrame({ columns: 5 })).lines).toEqual([`${INTENTUM_GLYPH} int`]);
+    expect((await renderBrandFrame({ columns: 11 })).lines).toEqual(["⋗ intentum"]);
+    expect((await renderBrandFrame({ columns: 5 })).lines).toEqual(["⋗ int"]);
   });
 
-  it("uses the environment fallback when a terminal font lacks the preferred glyph", () => {
-    vi.stubEnv("INTENTUM_ASCII_MARK", "1");
-    expect(intentumLabel("my-app")).toBe(`${INTENTUM_GLYPH_FALLBACK} intentum · my-app`);
+  it("measures the Nerd Font mark as one cell although it is a surrogate pair", async () => {
+    const frame = await renderBrandFrame({ columns: 10, symbols: "nerd" });
+    expect(frame.lines).toEqual(["\u{F08C9} intentum"]);
+    expect(frame.width).toBe(10);
+  });
+
+  it("follows INTENTUM_SYMBOLS when no preset is given", () => {
+    vi.stubEnv("INTENTUM_SYMBOLS", "ascii");
+    expect(intentumLabel("my-app")).toBe(">• intentum · my-app");
   });
 });

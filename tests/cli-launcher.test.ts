@@ -74,7 +74,7 @@ describe("intentum launcher", () => {
     const code = await runCli(["--model", "sonnet"], {
       stdout: captureStream(),
       stderr,
-      env,
+      env: { ...env, INTENTUM_SYMBOLS: "unicode" },
       cwd: repo.repo,
       spawn: recordingSpawn(launches),
       platform: "linux",
@@ -86,6 +86,16 @@ describe("intentum launcher", () => {
       cwd: repo.repo,
     }]);
     expect(stderr.output).toBe("");
+  });
+
+  it("nudges toward `intentum fonts install` only while no Nerd Font is reachable and no preset is chosen", async () => {
+    const stderr = captureStream();
+    await runCli([], { stdout: captureStream(), stderr, env, cwd: repo.repo, spawn: recordingSpawn([]), platform: "linux" });
+    expect(stderr.output).toBe("⋗ intentum: no Nerd Font found, so the status line uses plain glyphs. `intentum fonts install` adds the icons; INTENTUM_SYMBOLS=unicode silences this.\n");
+
+    const bundled = captureStream();
+    await runCli([], { stdout: captureStream(), stderr: bundled, env: { ...env, TERM_PROGRAM: "WezTerm" }, cwd: repo.repo, spawn: recordingSpawn([]), platform: "linux" });
+    expect(bundled.output).toBe("");
   });
 
   it("keeps an explicit --tui-mode instead of forcing fullscreen", async () => {
@@ -320,6 +330,60 @@ describe("intentum doctor", () => {
     });
     expect(stdout.output).toContain("Doctor Fixture · discovery phase");
   });
+
+  it("reports Nerd Font availability and honours an explicit symbol preset", async () => {
+    const stdout = captureStream();
+    await runCli(["doctor"], {
+      stdout,
+      stderr: captureStream(),
+      env: { ...env, INTENTUM_SYMBOLS: "unicode" },
+      cwd: repo.repo,
+      spawn: recordingSpawn([]),
+      platform: "linux",
+    });
+    expect(stdout.output).toContain("✓ Nerd Font        unicode glyphs (INTENTUM_SYMBOLS)");
+
+    await mkdir(join(home, "Library", "Fonts"), { recursive: true });
+    await writeFile(join(home, "Library", "Fonts", "HackNerdFontMono-Regular.ttf"), Buffer.from([0, 1, 0, 0]));
+    const detected = captureStream();
+    await runCli(["doctor"], { stdout: detected, stderr: captureStream(), env, cwd: repo.repo, spawn: recordingSpawn([]), platform: "darwin" });
+    expect(detected.output).toContain(`✓ Nerd Font        ${join(home, "Library", "Fonts", "HackNerdFontMono-Regular.ttf")}; icons enabled`);
+  });
+});
+
+describe("intentum fonts", () => {
+  let home: string;
+  let env: NodeJS.ProcessEnv;
+
+  beforeEach(async () => {
+    home = await realpath(await mkdtemp(join(tmpdir(), "intentum-home-")));
+    env = { PATH: process.env.PATH, HOME: home, NO_COLOR: "1", INTENTUM_PI: "/fake/pi" };
+  });
+
+  afterEach(async () => {
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it("installs the symbols font for the user through the launcher and reports failures", async () => {
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const rejected = await runCli(["fonts", "install"], {
+      stdout,
+      stderr,
+      env,
+      platform: "darwin",
+      fetch: (async () => new Response("nope", { status: 404 })) as unknown as typeof fetch,
+    });
+    expect(rejected).toBe(1);
+    expect(stderr.output).toContain("intentum fonts: download failed: 404");
+    expect(stdout.output).toBe("");
+
+    const status = captureStream();
+    expect(await runCli(["fonts"], { stdout: status, stderr: captureStream(), env, platform: "darwin" })).toBe(0);
+    expect(status.output).toContain("· Nerd Font        not found");
+    expect(status.output).toContain("intentum fonts install");
+    expect(await runCli(["fonts", "remove"], { stdout: captureStream(), stderr: captureStream(), env, platform: "darwin" })).toBe(1);
+  });
 });
 
 describe("intentum status", () => {
@@ -373,7 +437,7 @@ describe("intentum status", () => {
     const code = await runCli(["status"], {
       stdout,
       stderr: captureStream(),
-      env: { FORCE_COLOR: "1" },
+      env: { FORCE_COLOR: "1", INTENTUM_SYMBOLS: "unicode" },
       cwd: root,
     });
     expect(code).toBe(0);
@@ -445,15 +509,16 @@ describe("intentum status", () => {
     expect(stdout.output).toContain("NEXT\n  W-002 failed. Inspect the evidence before retrying or replacing the work.");
   });
 
-  it("tells the user to initialize when there is no project", async () => {
+  it("tells the user to initialize when there is no project, with the terminal's mark", async () => {
     const stderr = captureStream();
     const code = await runCli(["status"], {
       stdout: captureStream(),
       stderr,
-      env: { NO_COLOR: "1" },
+      env: { NO_COLOR: "1", TERM_PROGRAM: "ghostty" },
       cwd: root,
     });
     expect(code).toBe(1);
+    expect(stderr.output).toContain("\u{F08C9} intentum · no project in ");
     expect(stderr.output).toContain("intentum init [name]");
   });
 });

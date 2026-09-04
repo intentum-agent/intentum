@@ -73,7 +73,6 @@ export interface ControlPanelOptions {
   state: ProjectState;
   onAction: (action: PanelAction) => void;
   style?: Partial<PanelStyle>;
-  unicode?: boolean | undefined;
   mouse?: MouseAvailability;
   initialTab?: PanelTab;
   /** Rows available for the scrolling body. */
@@ -163,7 +162,6 @@ export class IntentumControlPanel implements Component {
   private state: ProjectState;
   private tab: PanelTab;
   private readonly style: PanelStyle;
-  private readonly unicode: boolean | undefined;
   private readonly mouse: MouseAvailability;
   private readonly onAction: (action: PanelAction) => void;
   private readonly reducedMotion: boolean;
@@ -197,7 +195,6 @@ export class IntentumControlPanel implements Component {
     this.state = options.state;
     this.onAction = options.onAction;
     this.style = { ...PLAIN_STYLE, ...options.style };
-    this.unicode = options.unicode;
     this.mouse = options.mouse ?? "unavailable";
     this.tab = options.initialTab ?? "overview";
     this.bodyHeight = Math.max(MIN_BODY_HEIGHT, options.bodyHeight ?? DEFAULT_BODY_HEIGHT);
@@ -509,7 +506,7 @@ export class IntentumControlPanel implements Component {
   private titleLine(inner: number): string {
     const phase = ` ${phaseLabel(this.state)} `;
     const label = truncateToWidth(
-      ` ${intentumLabel(singleLine(this.state.projectName), { unicode: this.unicode })} `,
+      ` ${intentumLabel(singleLine(this.state.projectName))} `,
       Math.max(4, inner - visibleWidth(phase) - 1),
       ELLIPSIS,
     );

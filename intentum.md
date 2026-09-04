@@ -2009,7 +2009,7 @@ mark 中的 `o`（小号）/ `@`（大号）是 point，用 Signal red（ANSI 31
 - status widget、footer、decision card、checkpoint card 内；
 - 任何会随 transcript 滚动的地方。
 
-banner 只出现一次，之后界面只用 `⋗`（U+22D7）作为 intentum 的标识，例如 `⋗ intentum · my-app`。字体缺少该字形时用 `>•`。
+banner 只出现一次，之后界面只用一个字形作为 intentum 的标识，例如 `⋗ intentum · my-app`。标识跟随 `INTENTUM_SYMBOLS` 字形集：检测到 Nerd Font（或显式 `nerd`）时用 nf-md-bullseye_arrow（U+F08C9），`unicode` 用 `⋗`（U+22D7），`ascii` 用 `>•`。
 
 响应宽度：
 

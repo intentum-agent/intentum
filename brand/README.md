@@ -46,8 +46,9 @@ never colours the arms or the letters.
   wordmark carries it on the `i`.
 - Do not rotate, outline, add gradients or shadows, change the 60° angle, move the
   point, or set the wordmark in another typeface.
-- In terminals use the glyph `⋗` (U+22D7 GREATER-THAN WITH DOT). Where the font lacks
-  it, use `>•`. For banners use the ASCII lockup below.
+- In terminals the mark follows the glyph preset: with a Nerd Font use
+  nf-md-bullseye_arrow (U+F08C9), otherwise `⋗` (U+22D7 GREATER-THAN WITH DOT), and
+  `>•` where the font renders neither. For banners use the ASCII lockup below.
 
 ## ASCII
 

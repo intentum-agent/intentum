@@ -2,6 +2,7 @@ import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, type OverlayHandle, type OverlayOptions, type TUI } from "@earendil-works/pi-tui";
 import type { IntentumRuntime } from "../runtime/intentum-runtime.js";
 import type { ProjectState, WorkerRecord } from "../state/schema.js";
+import { intentumLabel } from "../tui/brand.js";
 import { renderStatusBrief } from "../tui/status-widget.js";
 import { deriveHarnessPresentation } from "../tui/presentation.js";
 import { singleLine } from "../tui/text-layout.js";
@@ -435,7 +436,7 @@ function renderPanelFallback(state: ProjectState, columns: number, rows: number)
 
 function renderInlineFallback(state: ProjectState, width: number): string[] {
   const lines = [
-    "⋗ intentum · compact status",
+    `${intentumLabel()} · compact status`,
     "",
     ...renderStatusBrief(state).split("\n"),
     "",

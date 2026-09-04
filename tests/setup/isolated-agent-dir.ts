@@ -18,3 +18,11 @@ process.env.PI_CODING_AGENT_DIR = agentDir;
 process.on("exit", () => {
   rmSync(agentDir, { recursive: true, force: true });
 });
+
+/**
+ * Without a preset the glyph tables follow Nerd Font detection, and the brand
+ * mark would differ between developer machines and CI, or follow the shell's
+ * own INTENTUM_SYMBOLS. Tests that exercise detection or another preset pass
+ * their own environment objects or stub the variable.
+ */
+process.env.INTENTUM_SYMBOLS = "unicode";

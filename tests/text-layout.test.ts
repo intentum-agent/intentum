@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
-import { clipSingleLine, clipToCellWidth, padToCellWidth, singleLine, wrapToCellWidth } from "../src/tui/text-layout.js";
+import { clipHeadToCellWidth, clipSingleLine, clipToCellWidth, padToCellWidth, singleLine, wrapToCellWidth } from "../src/tui/text-layout.js";
 
 describe("terminal text layout", () => {
   it("clips CJK by cells instead of JavaScript string length", () => {
@@ -12,6 +12,13 @@ describe("terminal text layout", () => {
     const family = "👨‍👩‍👧‍👦";
     expect(clipToCellWidth(`A${family}BC`, 4)).toBe(`A${family}…`);
     expect(clipToCellWidth(`A${family}BC`, 2)).toBe("A…");
+  });
+
+  it("keeps the tail of a path and never splits a wide grapheme at the cut", () => {
+    expect(clipHeadToCellWidth("~/dev/app", 9)).toBe("~/dev/app");
+    expect(clipHeadToCellWidth("~/very/long/path/leaf", 9)).toBe("…ath/leaf");
+    expect(clipHeadToCellWidth("目录/产品设计/审阅", 8)).toBe("…计/审阅");
+    expect(clipHeadToCellWidth("目录/产品设计/审阅", 7)).toBe("…/审阅");
   });
 
   it("collapses copy before clipping and pads by visible cells", () => {

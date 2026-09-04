@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { describe, expect, it } from "vitest";
+import { hostname } from "node:os";
+import { describe, expect, it, vi } from "vitest";
 import type { IntentumRuntime } from "../src/runtime/intentum-runtime.js";
 import type { ProjectState, WorkerRecord } from "../src/state/schema.js";
 import {
@@ -22,12 +23,31 @@ const MARKED: ChromeStyle = {
   bold: (text) => `<b>${text}</b>`,
   dim: (text) => `<d>${text}</d>`,
   italic: (text) => `<i>${text}</i>`,
+  muted: (text) => `<m>${text}</m>`,
   accent: (text) => `<a>${text}</a>`,
   border: (text) => `<r>${text}</r>`,
+  link: (text) => `<l>${text}</l>`,
+  label: (text) => `<k>${text}</k>`,
+  success: (text) => `<g>${text}</g>`,
   warning: (text) => `<w>${text}</w>`,
   danger: (text) => `<e>${text}</e>`,
   signal: (text) => `<s>${text}</s>`,
 };
+
+/** Everything a live Pi session hands the footer, in the shape of the target screenshot. */
+const SESSION = {
+  host: "Bobbys-MacBook-Pro",
+  model: "GPT-5.6-Sol",
+  thinkingLevel: "xhigh",
+  cwd: "/home/bobby/dev/app",
+  home: "/home/bobby",
+  branch: "main",
+  workingTree: { staged: 5, unstaged: 10, untracked: 0 },
+  sessionId: "01a06c6f-2bea-7404-b5ba-ff77b27731cb",
+  usage: { input: 18_200, output: 13, cost: 0.14 },
+  context: { percent: 6.1, contextWindow: 272_000 },
+  symbols: "unicode",
+} as const;
 
 describe("intentum welcome card", () => {
   const now = new Date("2026-09-04T12:00:00Z");
@@ -138,60 +158,109 @@ describe("intentum welcome card", () => {
 });
 
 describe("intentum session footer", () => {
-  it("names the missing project and the command that creates it", () => {
-    expect(renderFooterLine({ state: undefined }, 80)).toBe("⋗ intentum · no project · /init");
+  it("names the missing project and the command that creates it, beside the session facts", () => {
+    expect(renderFooterLine({ state: undefined, symbols: "unicode" }, 80)).toBe(" ⋗ intentum · no project · /init");
+    const line = stripHyperlinks(renderFooterLine({ ...SESSION, state: undefined }, 140));
+    expect(line).toMatch(/^ ⋗ intentum · no project · \/init · ⬢ GPT-5\.6-Sol · xhigh · ▸ ~\/dev\/app · ⑂ main \*10 \+5 · ⌗ 01a06c6f {2,}↑ 18K · ↓ 13 · \$0\.14 · ◫ 6\.1%\/272K $/);
   });
 
-  it("keeps an idle project to identity, phase, and session facts", () => {
-    const line = renderFooterLine(
-      { state: projectState(), branch: "main", context: { percent: 0, contextWindow: 262_144 } },
-      100,
+  it("leads with the mark and project, then session facts, then phase, with spend right-aligned", () => {
+    const line = renderFooterLine({ ...SESSION, state: projectState() }, 200);
+    expect(stripHyperlinks(line)).toBe(
+      " ⋗ Fixture Product · ▣ Bobbys-MacBook-Pro · ⬢ GPT-5.6-Sol · xhigh · ▸ ~/dev/app · ⑂ main *10 +5 · ⌗ 01a06c6f · ⚑ DISCOVERY 1/8 · ⚙ guided"
+      + " ".repeat(19)
+      + "↑ 18K · ↓ 13 · $0.14 · ◫ 6.1%/272K · ◫ 272K ",
     );
-    expect(line).toMatch(/^⋗ intentum · Fixture Product · DISCOVERY 1\/8 · guided {2,}main · 0% of 262k$/);
-    expect(visibleWidth(line)).toBe(100);
+    expect(visibleWidth(line)).toBe(200);
+  });
+
+  it("links the working directory so terminals can open it", () => {
+    const line = renderFooterLine({ ...SESSION, state: projectState() }, 160);
+    expect(line).toContain("\u001b]8;;file:///home/bobby/dev/app\u0007~/dev/app\u001b]8;;\u0007");
   });
 
   it("adds only the counts that need a glance, coloured by severity", () => {
-    const line = renderFooterLine({ state: busyState(), otherStatuses: ["plan mode"] }, 400, MARKED);
+    const line = renderFooterLine({ state: busyState(), otherStatuses: ["plan mode"], symbols: "unicode" }, 400, MARKED);
     expect(line).toBe(
-      "<d>⋗ intentum · Fixture Product</d><d> · </d><d>BUILD 4/8</d><d> · </d><w>◆ 1 decision</w><d> · </d><w>⚠ 1 attention</w><d> · </d><d>● 2 active</d><d> · </d><d>balanced</d><d> · </d><d>plan mode</d>",
+      " <d>⋗ Fixture Product</d><d> · </d><a>⚑ BUILD 4/8</a><d> · </d><w>◆ 1 decision</w><d> · </d><w>⚠ 1 attention</w><d> · </d>"
+      + "<a>● 2 active</a><d> · </d><d>⚙ balanced</d><d> · </d><d>plan mode</d>",
     );
   });
 
-  it("yields the right side first when the terminal is narrow", () => {
-    const line = renderFooterLine({ state: projectState(), branch: "feature/long-branch-name", context: { percent: 12.4, contextWindow: 262_144 } }, 60);
-    expect(line).toBe("⋗ intentum · Fixture Product · DISCOVERY 1/8 · guided");
-    expect(stripAnsi(renderFooterLine({ state: projectState() }, 20))).toBe("DISCOVERY 1/8");
+  it("colours git by cleanliness and context by pressure", () => {
+    const untracked = renderFooterLine({ ...SESSION, state: projectState(), workingTree: { staged: 0, unstaged: 0, untracked: 2 } }, 200, MARKED);
+    expect(untracked).toContain("<w>⑂ main</w> <l>?2</l>");
+    expect(renderFooterLine({ ...SESSION, state: projectState() }, 200, MARKED)).toContain("<w>⑂ main</w> <w>*10</w> <g>+5</g>");
+    expect(renderFooterLine({ ...SESSION, state: projectState(), workingTree: { staged: 0, unstaged: 0, untracked: 0 } }, 200, MARKED))
+      .toContain("<g>⑂ main</g><d> · </d>");
+
+    const pressured = renderFooterLine({ ...SESSION, state: projectState(), context: { percent: 91.4, contextWindow: 272_000 } }, 200, MARKED);
+    expect(pressured).toContain("<e>◫ 91.4%/272K</e>");
+    const unknown = renderFooterLine({ ...SESSION, state: projectState(), context: { percent: null, contextWindow: 272_000 } }, 200, MARKED);
+    expect(unknown).toContain("<m>◫ ?/272K</m>");
+  });
+
+  it("yields host, session, and totals first and keeps context pressure longest", () => {
+    const line = renderFooterLine({ ...SESSION, state: projectState() }, 100);
+    expect(stripHyperlinks(line)).toBe(
+      " ⋗ Fixture Product · ▸ ~/dev/app · ⑂ main *10 +5 · ⚑ DISCOVERY 1/8      ↑ 18K · $0.14 · ◫ 6.1%/272K ",
+    );
+    expect(visibleWidth(line)).toBe(100);
+    expect(renderFooterLine({ ...SESSION, state: projectState() }, 50)).toBe(" ⋗ Fixture Product · ⚑ DISCOVERY 1/8  ◫ 6.1%/272K ");
+    expect(stripAnsi(renderFooterLine({ state: projectState(), symbols: "unicode" }, 20))).toBe(" ⚑ DISCOVERY 1/8");
   });
 
   it("does not repeat the wordmark when the project is named intentum", () => {
     const state = { ...projectState(), projectName: "intentum" };
-    expect(renderFooterLine({ state }, 80)).toBe("⋗ intentum · DISCOVERY 1/8 · guided");
+    expect(renderFooterLine({ state, symbols: "unicode" }, 80)).toBe(" ⋗ intentum · ⚑ DISCOVERY 1/8 · ⚙ guided");
   });
 
   it("preserves phase, a blocking decision, and exceptional work before identity", () => {
-    const line = renderFooterLine({ state: busyState(), branch: "feature/hidden-first" }, 40);
+    const line = renderFooterLine({ ...SESSION, state: busyState() }, 44);
     expect(line).toContain("BUILD 4/8");
     expect(line).toContain("◆ 1 decision");
     expect(line).toContain("⚠ 1 attention");
     expect(line).not.toContain("Fixture Product");
-    expect(line).not.toContain("feature/hidden-first");
-    expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+    expect(line).not.toContain("main");
+    expect(visibleWidth(line)).toBeLessThanOrEqual(44);
   });
 
   it("keeps essential glyphs at the smallest practical footer width", () => {
-    const line = renderFooterLine({ state: busyState() }, 12);
+    const line = renderFooterLine({ state: busyState(), symbols: "unicode" }, 12);
     expect(line).toContain("4/8");
     expect(line).toContain("◆1");
     expect(line).toContain("⚠1");
     expect(visibleWidth(line)).toBeLessThanOrEqual(12);
   });
 
-  it("strips terminal controls from project, branch, model, and cwd labels", () => {
+  it("swaps glyph sets per symbol preset", () => {
+    const nerd = renderFooterLine({ ...SESSION, state: projectState(), symbols: "nerd" }, 200);
+    expect(nerd).toContain(" \u{F08C9} Fixture Product · ");
+    expect(nerd).toContain("\uF126 main *10 +5");
+    expect(nerd).toContain("\uF155 0.14");
+    expect(nerd).toContain("\uE70F 6.1%/272K");
+    const ascii = stripHyperlinks(renderFooterLine({ ...SESSION, state: projectState(), symbols: "ascii" }, 200));
+    expect(ascii).toContain(">• Fixture Product · host Bobbys-MacBook-Pro · GPT-5.6-Sol · xhigh · ~/dev/app · @ main *10 +5 · id 01a06c6f · DISCOVERY 1/8 · guided");
+    expect(ascii).toContain("in: 18K · out: 13 · $0.14 · ctx: 6.1%/272K · ctx: 272K");
+  });
+
+  it("keeps a long working directory recognisable from its tail", () => {
+    const deep = `/home/bobby/${"segment/".repeat(12)}leaf`;
+    const line = stripHyperlinks(renderFooterLine({ ...SESSION, state: projectState(), cwd: deep }, 300));
+    const shown = /▸ (\S+)/.exec(line)?.[1] ?? "";
+    expect(shown.startsWith("…")).toBe(true);
+    expect(shown.endsWith("segment/segment/leaf")).toBe(true);
+    expect(visibleWidth(shown)).toBeLessThanOrEqual(48);
+    expect(line).not.toContain("~/segment/");
+  });
+
+  it("strips terminal controls from project, branch, host, model, and cwd labels", () => {
     const state = { ...projectState(), projectName: "\u001b[31mFixture\u001b[0m\nInjected" };
-    const footer = renderFooterLine({ state, branch: "main\nInjected" }, 100);
+    const footer = renderFooterLine({ state, branch: "main\nInjected", host: "box\u0007\nInjected", model: "m\rInjected", symbols: "unicode" }, 200);
     expect(footer).toContain("Fixture Injected");
     expect(footer).toContain("main Injected");
+    expect(footer).toContain("box Injected");
+    expect(footer).toContain("m Injected");
     expect(footer).not.toContain("\u001b");
     const card = renderWelcomeCard(LOGO, {
       version: "0.1.0",
@@ -208,15 +277,23 @@ describe("intentum session footer", () => {
     expect(card).not.toContain("\u001b");
   });
 
-  it("formats context windows the way the footer reads them", () => {
-    expect(formatTokens(262_144)).toBe("262k");
+  it("formats token counts the way the footer reads them", () => {
+    expect(formatTokens(262_144)).toBe("262K");
+    expect(formatTokens(18_200)).toBe("18K");
+    expect(formatTokens(1_500)).toBe("1.5K");
+    expect(formatTokens(1_000)).toBe("1K");
     expect(formatTokens(1_000_000)).toBe("1M");
+    expect(formatTokens(1_250_000)).toBe("1.3M");
     expect(formatTokens(512)).toBe("512");
   });
 });
 
 function stripAnsi(value: string): string {
   return value.replaceAll(/\u001b\[[0-9;]*m/g, "");
+}
+
+function stripHyperlinks(value: string): string {
+  return value.replaceAll(/\u001b\]8;;[^\u0007]*\u0007/g, "");
 }
 
 function projectState(): ProjectState {
@@ -260,7 +337,8 @@ function busyState(): ProjectState {
 }
 
 describe("installSessionChrome", () => {
-  it("pads the footer with one blank row to mirror Pi's spacer above the editor", async () => {
+  it("installs a single-row footer fed from the host session", async () => {
+    vi.stubEnv("INTENTUM_SYMBOLS", "unicode");
     const runtime = {
       store: { exists: async () => false, read: async () => undefined },
       onStateChange: () => () => {},
@@ -285,8 +363,15 @@ describe("installSessionChrome", () => {
       { fg: (_color: string, text: string) => text, bold: (text: string) => text },
       { onBranchChange: () => () => {}, getGitBranch: () => "main", getExtensionStatuses: () => new Map() },
     );
-    expect(footer.render(80)).toEqual(["", "⋗ intentum · no project · /init" + " ".repeat(80 - 31 - 4) + "main"]);
+    const lines = footer.render(120);
+    expect(lines).toHaveLength(1);
+    const line = stripHyperlinks(lines[0] ?? "");
+    expect(line).toContain(" ⋗ intentum · no project · /init · ");
+    expect(line).toContain(`▣ ${hostname().split(".")[0]}`);
+    expect(line).toContain("▸ /home/bobby/dev/app · ⑂ main");
+    expect(visibleWidth(line)).toBeLessThanOrEqual(120);
     dispose();
+    vi.unstubAllEnvs();
   });
 
   it("uses a restrained Designer indicator and restores Pi defaults on dispose", async () => {
