@@ -717,7 +717,7 @@ function nextStep(state: ProjectState, summary: WorkerSummary, blocking: Decisio
   const stuck = summary.attention[0];
   if (stuck) return `${stuck.id} is ${stuck.status}; resume it or give it an instruction.`;
   if (summary.active.length) return `${summary.active.length} Worker${summary.active.length === 1 ? " is" : "s are"} busy. Steer them or keep shaping the product in chat.`;
-  if (state.phase === "discovery") return "Describe the users and the outcome you want; the Designer drafts the charter.";
+  if (state.phase === "discovery") return "Draft the charter from the existing repository; only ask what the tree cannot answer.";
   return "Ask for the next outcome in chat; the Designer turns it into Worker contracts.";
 }
 

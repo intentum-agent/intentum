@@ -10,26 +10,26 @@ const CHARTER_TEMPLATE = `# Product Charter
 
 ## Target users
 
-[To be established with the user]
+[Infer from the repository; confirm only unresolved product decisions]
 
 ## Primary outcome
 
-[To be established with the user]
+[Infer from the repository; confirm only unresolved product decisions]
 
 ## Success criteria
 
-[To be established with the user]
+[Infer from the repository; confirm only unresolved product decisions]
 
 ## Non-goals
 
-[To be established with the user]
+[Infer from the repository; confirm only unresolved product decisions]
 `;
 
 const ARCHITECTURE_TEMPLATE = `# Current Approved Architecture Direction
 
 ## Context
 
-[To be established during discovery]
+[Infer from the repository; confirm only unresolved constraints]
 
 ## Direction
 
@@ -37,7 +37,7 @@ const ARCHITECTURE_TEMPLATE = `# Current Approved Architecture Direction
 
 ## Constraints and trade-offs
 
-[To be established during discovery]
+[Infer from the repository; confirm only unresolved constraints]
 `;
 
 export type ProjectArtifact = "charter" | "architecture";

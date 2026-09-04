@@ -180,12 +180,12 @@ The target repository must already have `HEAD`; Intentum refuses to create a Wor
 
 ## Interaction model
 
-Normal conversation remains the primary interface. The Designer reflects the user's goal, identifies the most important uncertainty, recommends a direction, and asks at most one important product question at a time. Deterministic operations are delegated to Intentum tools rather than simulated in the Designer chat.
+Normal conversation remains the primary interface. The Designer inspects the existing repository, drafts charter and architecture from that evidence, identifies the most important residual uncertainty, and asks at most one important product question at a time — usually to confirm a draft, not to start from scratch. Deterministic operations are delegated to Intentum tools rather than simulated in the Designer chat.
 
 Typical flow:
 
 1. Run `intentum init [name]`, or `/intentum init` inside Pi.
-2. Establish the charter and approved architecture direction through Designer conversation.
+2. Confirm the repo-derived charter and approved architecture direction.
 3. The Designer submits one broad `intentum_create_work` contract.
 4. The controller creates `intentum/F-001/W-001` in an external worktree.
 5. The Worker inspects, implements, tests, commits, and submits a structured result.

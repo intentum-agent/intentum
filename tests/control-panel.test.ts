@@ -44,6 +44,12 @@ describe("intentum control panel rendering", () => {
     expect(text).toContain("No Worker yet. New work starts from conversation with the Designer.");
   });
 
+  it("tells discovery to draft the charter from the repository", () => {
+    const text = plain(new IntentumControlPanel({ state: projectState(), onAction: () => {} }).render(140));
+    expect(text).toContain("Draft the charter from the existing repository");
+    expect(text).not.toContain("Describe the users and the outcome you want");
+  });
+
   it("names the mouse limitation in fullscreen mode", () => {
     const fullscreen = new IntentumControlPanel({ state: busyState(), onAction: () => {}, mouse: "fullscreen" });
     expect(plain(fullscreen.render(100))).toContain("mouse: keyboard only in fullscreen");

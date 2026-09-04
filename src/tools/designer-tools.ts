@@ -54,7 +54,7 @@ export function registerDesignerTools(pi: ExtensionAPI, runtimeSource: IntentumR
     name: "intentum_create_work",
     label: "intentum create work",
     description: "Create and start one broad outcome-based WorkContract in an independent Pi Worker and Git worktree.",
-    promptSnippet: "Use intentum_create_work for a complete vertical slice, not microtasks.",
+    promptSnippet: "Use intentum_create_work for a complete vertical slice grounded in existing repository files (touchHints, contextFiles), not a greenfield rewrite or microtasks.",
     executionMode: "sequential",
     parameters: Type.Object({
       featureId: Type.String({ minLength: 1 }),
