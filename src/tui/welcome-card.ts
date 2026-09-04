@@ -18,6 +18,8 @@ const LEFT_MIN_WIDTH = 20;
 const LEFT_MAX_WIDTH = 32;
 /** Below this the right pane truncates every tip; the frame is dropped instead. */
 const RIGHT_MIN_WIDTH = 34;
+/** Right-pane content is ~50 columns; a wider frame is empty border on wide terminals. */
+const CARD_MAX_WIDTH = 100;
 const TIP_LABEL = "Tip:";
 const TIP_INDENT = " ".repeat(TIP_LABEL.length + 1);
 export const MAX_RECENT_SESSIONS = 3;
@@ -103,7 +105,7 @@ export function renderWelcomeCard(
   width: number,
   style: ChromeStyle = PLAIN_STYLE,
 ): string[] {
-  const columns = Math.max(1, Math.floor(width));
+  const columns = Math.min(CARD_MAX_WIDTH, Math.max(1, Math.floor(width)));
   const left = leftPane(logo, input, style);
   const leftWidth = Math.min(
     Math.max(LEFT_MIN_WIDTH, Math.min(LEFT_MAX_WIDTH, left.reduce((max, line) => Math.max(max, visibleWidth(line)), 0))),
