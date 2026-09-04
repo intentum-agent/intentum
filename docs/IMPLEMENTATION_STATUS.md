@@ -45,7 +45,7 @@
 12. 显式 `--no-ff` merge；target branch/base/head/Git-operation 前置校验；真实冲突自动 abort；幂等 crash reconciliation；integration 在 runtime dispose 前被 cancel/drain。
 13. 从 `brand/ascii/` 读取的响应式、一次性欢迎 Banner；Pi TUI 每行 `Text` 渲染；Signal point 精确着色；RPC 使用可序列化行且 restore 不重放。
 14. `intentum` 启动器（launch/init/status/doctor，见 `tests/cli-launcher.test.ts`）、`--help/--version`、品牌资源发布白名单、真实 tarball 离线安装与已安装 `intentum`/`pi-intentum` bin 执行门禁。
-15. Focus View 状态 widget（phase `4/8`、feature、最近结果、风险、是否需要决策、相关操作）与 `/intentum` 控制面板 overlay（Overview/Workers/Decisions/Help；键盘全覆盖；Pi regular 模式下按 SGR 鼠标协议点击/滚轮/点击外部关闭，鼠标上报只在面板打开期间启用；fullscreen 模式下 Pi viewport 独占鼠标，面板仅键盘）。决策只会草拟到 editor，不在面板内直接裁决。见 `src/tui/control-panel.ts`、`src/tools/control-panel-host.ts`、`tests/control-panel*.test.ts`。
+15. 统一 `HarnessPresentationModel`、主题感知 attention widget、优先级 footer，以及 `/intentum` command center（Overview/Workers/Decisions/Help）。Fullscreen 临时覆盖 viewport：≥100×22 双栏、≥60×16 单栏，更小尺寸降级为纯文本状态；regular 模式使用居中面板与整行 SGR 鼠标命中。面板具备视口安全焦点、操作中/成功/错误反馈、reduced-motion、懒加载且证据优先的 Worker details；决策仍只草拟到 editor。见 `src/tui/presentation.ts`、`src/tui/control-panel.ts`、`src/tools/control-panel-host.ts`。
 
 ## 关键不变量
 
@@ -112,7 +112,7 @@ pnpm exec pi --version
 | sandbox 内代表性依赖 build/test | NOT_PROVEN |
 | provider-backed Worker 完成真实任务 | NOT_PROVEN |
 | live streaming pause/steer timing | NOT_PROVEN |
-| interactive TUI component rendering | unit PASS（真实 `Container`/逐行 `Text`）；控制面板在真实 Pi 0.84.4 TUI（expect 驱动的 pty，120×40）中完成一次性验收：overlay 渲染、SGR 点击切换 Workers tab、点击外部关闭、鼠标上报启用/关闭各一次；人工视觉验收仍为手动门禁 |
+| interactive TUI component rendering | PASS：unit 覆盖 30×12/40×12 fallback、60×16/80×24 compact、120×40 wide、CJK/emoji、焦点/滚动、action/detail state；真实 Pi 0.84.4 PTY 已验收 fullscreen 80×24/120×40 全屏覆盖、40×12 文本降级、嵌套 confirm 可见与 regular 80×24/mouse-report lifecycle；launcher-selected Pi 0.85.0 fullscreen 80×24 兼容通过 |
 | one-off `--api-key` 继承到 child runtime | NOT_PROVEN |
 | 动态注册第三方 provider 继承 | NOT_PROVEN |
 

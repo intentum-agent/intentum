@@ -5,8 +5,10 @@ import type { IntentumRuntime } from "../src/runtime/intentum-runtime.js";
 import type { ProjectState, WorkerRecord } from "../src/state/schema.js";
 import {
   type ChromeStyle,
+  designerWorkingIndicator,
   formatTokens,
   installSessionChrome,
+  reducedMotionEnabled,
   renderFooterLine,
   renderHeaderLines,
 } from "../src/tui/session-chrome.js";
@@ -61,26 +63,57 @@ describe("intentum session footer", () => {
       { state: projectState(), branch: "main", context: { percent: 0, contextWindow: 262_144 } },
       100,
     );
-    expect(line).toMatch(/^⋗ intentum · Fixture Product · discovery 1\/8 · guided {2,}main · 0% of 262k$/);
+    expect(line).toMatch(/^⋗ intentum · Fixture Product · DISCOVERY 1\/8 · guided {2,}main · 0% of 262k$/);
     expect(visibleWidth(line)).toBe(100);
   });
 
   it("adds only the counts that need a glance, coloured by severity", () => {
     const line = renderFooterLine({ state: busyState(), otherStatuses: ["plan mode"] }, 400, MARKED);
     expect(line).toBe(
-      "<d>⋗ intentum · Fixture Product · build 4/8 · balanced</d><d> · </d><d>2 workers</d><d> · </d><e>⚠ 1</e><d> · </d><w>◆ decision</w><d> · </d><d>plan mode</d>",
+      "<d>⋗ intentum · Fixture Product</d><d> · </d><d>BUILD 4/8</d><d> · </d><w>◆ 1 decision</w><d> · </d><w>⚠ 1 attention</w><d> · </d><d>● 2 active</d><d> · </d><d>balanced</d><d> · </d><d>plan mode</d>",
     );
   });
 
   it("yields the right side first when the terminal is narrow", () => {
     const line = renderFooterLine({ state: projectState(), branch: "feature/long-branch-name", context: { percent: 12.4, contextWindow: 262_144 } }, 60);
-    expect(line).toBe("⋗ intentum · Fixture Product · discovery 1/8 · guided");
-    expect(stripAnsi(renderFooterLine({ state: projectState() }, 20))).toBe("⋗ intentum · Fixtur…");
+    expect(line).toBe("⋗ intentum · Fixture Product · DISCOVERY 1/8 · guided");
+    expect(stripAnsi(renderFooterLine({ state: projectState() }, 20))).toBe("DISCOVERY 1/8");
   });
 
   it("does not repeat the wordmark when the project is named intentum", () => {
     const state = { ...projectState(), projectName: "intentum" };
-    expect(renderFooterLine({ state }, 80)).toBe("⋗ intentum · discovery 1/8 · guided");
+    expect(renderFooterLine({ state }, 80)).toBe("⋗ intentum · DISCOVERY 1/8 · guided");
+  });
+
+  it("preserves phase, a blocking decision, and exceptional work before identity", () => {
+    const line = renderFooterLine({ state: busyState(), branch: "feature/hidden-first" }, 40);
+    expect(line).toContain("BUILD 4/8");
+    expect(line).toContain("◆ 1 decision");
+    expect(line).toContain("⚠ 1 attention");
+    expect(line).not.toContain("Fixture Product");
+    expect(line).not.toContain("feature/hidden-first");
+    expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+  });
+
+  it("keeps essential glyphs at the smallest practical footer width", () => {
+    const line = renderFooterLine({ state: busyState() }, 12);
+    expect(line).toContain("4/8");
+    expect(line).toContain("◆1");
+    expect(line).toContain("⚠1");
+    expect(visibleWidth(line)).toBeLessThanOrEqual(12);
+  });
+
+  it("strips terminal controls from project, branch, model, and cwd labels", () => {
+    const state = { ...projectState(), projectName: "\u001b[31mFixture\u001b[0m\nInjected" };
+    const footer = renderFooterLine({ state, branch: "main\nInjected" }, 100);
+    expect(footer).toContain("Fixture Injected");
+    expect(footer).toContain("main Injected");
+    expect(footer).not.toContain("\u001b");
+    expect(renderHeaderLines(LOGO, {
+      version: "0.1.0",
+      model: "model\nInjected",
+      cwd: "/tmp/project\nInjected",
+    }, 100).join("\n")).not.toContain("model\nInjected");
   });
 
   it("formats context windows the way the footer reads them", () => {
@@ -153,7 +186,7 @@ describe("installSessionChrome", () => {
       },
     } as unknown as ExtensionContext;
 
-    await installSessionChrome(runtime, ctx);
+    const dispose = await installSessionChrome(runtime, ctx);
     expect(footerFactory).toBeDefined();
     const footer = (footerFactory as unknown as LooseFooterFactory)(
       { requestRender() {} },
@@ -161,5 +194,53 @@ describe("installSessionChrome", () => {
       { onBranchChange: () => () => {}, getGitBranch: () => "main", getExtensionStatuses: () => new Map() },
     );
     expect(footer.render(80)).toEqual(["", "⋗ intentum · no project · /intentum init" + " ".repeat(80 - 40 - 4) + "main"]);
+    dispose();
+  });
+
+  it("uses a restrained Designer indicator and restores Pi defaults on dispose", async () => {
+    const runtime = {
+      store: { exists: async () => false, read: async () => undefined },
+      onStateChange: () => () => {},
+    } as unknown as IntentumRuntime;
+    const messages: Array<string | undefined> = [];
+    const indicators: Array<{ frames: string[]; intervalMs?: number } | undefined> = [];
+    const ctx = {
+      mode: "tui",
+      cwd: "/home/bobby/dev/app",
+      getContextUsage: () => undefined,
+      ui: {
+        theme: { fg: (_color: string, text: string) => `<theme>${text}</theme>`, bold: (text: string) => text },
+        setWorkingMessage: (message?: string) => messages.push(message),
+        setWorkingIndicator: (indicator?: { frames: string[]; intervalMs?: number }) => indicators.push(indicator),
+        setHeader: () => {},
+        setFooter: () => {},
+      },
+    } as unknown as ExtensionContext;
+
+    const dispose = await installSessionChrome(runtime, ctx);
+    expect(messages).toEqual(["Designer working"]);
+    expect(indicators[0]).toMatchObject({ intervalMs: 160 });
+    expect(indicators[0]?.frames).toEqual([
+      "<theme>·</theme>",
+      "<theme>•</theme>",
+      "<theme>●</theme>",
+      "<theme>•</theme>",
+    ]);
+    dispose();
+    dispose();
+    expect(messages).toEqual(["Designer working", undefined]);
+    expect(indicators.at(-1)).toBeUndefined();
+    expect(indicators).toHaveLength(2);
+  });
+});
+
+describe("Designer working indicator", () => {
+  it("uses a static branded point when reduced motion is requested", () => {
+    expect(reducedMotionEnabled({ INTENTUM_REDUCED_MOTION: "1" })).toBe(true);
+    expect(reducedMotionEnabled({ INTENTUM_REDUCED_MOTION: "0" })).toBe(false);
+    expect(designerWorkingIndicator(MARKED, true)).toEqual({
+      message: "Designer working",
+      frames: ["<s>●</s>"],
+    });
   });
 });

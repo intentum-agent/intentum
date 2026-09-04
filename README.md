@@ -19,7 +19,7 @@ The implementation is a real **Phase 1 + single-Worker Phase 2 controller slice*
 - explicit project lifecycle transitions;
 - a bounded Designer system-context injection;
 - a one-time, responsive terminal welcome sourced from the shipped brand assets;
-- a quiet session chrome: a startup card in place of Pi's key hints, a one-line footer, an attention-only widget above the editor, and a mouse-clickable control panel;
+- a quiet session chrome: a startup card in place of Pi's key hints, a one-line footer, an attention-only widget above the editor, and a keyboard-first command center with regular-mode mouse support;
 - command-only RPC loading and initialization without a provider request.
 
 ### Phase 2 — one strong Worker
@@ -93,7 +93,7 @@ there the Designer conversation takes over. Later sessions just need:
 
 ```bash
 intentum                   # open Pi with Intentum loaded
-intentum status            # print the project phase and Workers without starting Pi
+intentum status            # print next steps, attention, work, and project details without starting Pi
 intentum --model sonnet    # anything else is passed straight to pi
 ```
 
@@ -109,6 +109,10 @@ Pi's inline mode instead. On exit Pi prints the transcript back into the termina
 default; Pi's `fullscreenExitOutput` setting (`/settings` inside Pi) switches that to a
 short resume hint. The launcher never talks to a model itself. Pi owns model/provider authentication and session transcripts;
 Intentum stores only the Pi session reference and does not copy transcripts into `.intentum/`.
+
+`intentum status` is deliberately plain text with no ANSI styling. It leads with the
+next step, then work needing attention, current work, and project details; repository
+text stays on one line without truncating CJK text or emoji.
 
 `intentum doctor` reports what will and will not work on this machine. On macOS it
 warns that Workers cannot start because the sandbox requires Linux with Bubblewrap.
@@ -159,20 +163,29 @@ Pi's own `[Skills]`, `[Prompts]`, and `[Extensions]` listing is printed by Pi, n
 Intentum; set `"quietStartup": true` in `~/.pi/agent/settings.json` (or the project's
 `.pi/settings.json`) to hide it.
 
-`/intentum` with no arguments opens the control panel as an overlay with four tabs:
-Overview (next step, phase trail, decision and worker highlights, project actions),
-Workers (one row per Worker with status-appropriate buttons such as Steer, Pause,
-Resume, Integrate, Abort, and Details), Decisions (options, the Designer's
-recommendation, affected work), and Help. The panel updates live while it is open.
+`/intentum` with no arguments opens a temporary command center with four tabs:
+Overview (next step, attention/results, active work, project context), Workers,
+Decisions, and Help. Fullscreen mode fills the viewport so transcript text cannot
+bleed around the surface; terminals at least 100×22 use a two-column workspace and
+terminals at least 60×16 use a compact single column. Smaller terminals receive a
+plain status summary and the relevant slash commands instead of clipped controls.
 
-Every control works with the keyboard (`↑↓`/`j`/`k` move, `⏎` acts, `tab` or `1`-`4`
-switch tabs, `p` pauses or resumes, `esc` closes). In Pi's fullscreen mode, which the
-`intentum` launcher uses by default, the viewport owns the mouse, so the panel is
-keyboard-only there. In Pi's regular terminal mode (`intentum --tui-mode regular`, or
-plain `pi`) the panel also takes the mouse: click a tab, a row, or a `[button]`, scroll
-with the wheel, and click outside the panel to close it. Mouse reporting is enabled
-only while the panel is open, so native selection and scrollback return as soon as it
-closes.
+Worker details load only when requested. They lead with the outcome, user-visible
+changes, test evidence, remaining risks, and follow-ups; branch, worktree, session,
+and commit metadata stay secondary. Paused work is neutral, blocked work is a
+warning, failures are errors, and completed work is explicitly ready for review.
+
+Every control is a full-width keyboard option (`↑↓`/`j`/`k` move, `⏎` acts, `tab` or
+`1`-`4` switch tabs, `p` pauses or resumes, `esc` closes). In Pi's fullscreen mode,
+which the `intentum` launcher uses by default, the viewport owns the mouse, so the
+command center is deliberately keyboard-first. In regular mode (`intentum --tui-mode
+regular`, or plain `pi`) the centred panel also takes the mouse: click anywhere on an
+option row, scroll with the wheel, and click outside to close it. Mouse reporting is
+enabled only while the panel is open.
+
+Designer streaming, Worker activity, and panel actions use restrained pulse/spinner
+feedback. Set `INTENTUM_REDUCED_MOTION=1` to keep the same state labels with static
+glyphs.
 Choosing a decision in the panel drafts the message into the editor; you still send
 it to the Designer yourself.
 

@@ -20,6 +20,22 @@ const MINIMUM_NODE = [22, 19, 0];
 const PI_PACKAGE = "@earendil-works/pi-coding-agent";
 const DEFAULT_TUI_MODE = "fullscreen";
 const TRUSTED_BWRAP_CANDIDATES = ["/usr/bin/bwrap", "/bin/bwrap"];
+const ACTIVE_PROJECT_PHASES = ["discovery", "direction", "architecture", "build", "verify", "review", "ship", "maintain"];
+const ATTENTION_WORKER_STATUSES = new Set(["failed", "blocked", "interrupted", "completed", "integrated"]);
+
+const WORKER_PRESENTATION = Object.freeze({
+  queued: { glyph: "◌", label: "Queued" },
+  starting: { glyph: "◔", label: "Starting" },
+  working: { glyph: "●", label: "Working" },
+  blocked: { glyph: "⚠", label: "Blocked" },
+  pause_requested: { glyph: "◑", label: "Pausing" },
+  paused: { glyph: "○", label: "Paused" },
+  verifying: { glyph: "◐", label: "Verifying" },
+  completed: { glyph: "✓", label: "Ready for review" },
+  failed: { glyph: "✕", label: "Failed" },
+  interrupted: { glyph: "!", label: "Interrupted" },
+  integrated: { glyph: "✓", label: "Integrated" },
+});
 
 const packageUrl = new URL("../package.json", import.meta.url);
 const packageRoot = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
@@ -129,7 +145,7 @@ async function showHelp(stdout, env) {
     "Usage:",
     "  intentum                   Open Pi in this repository with Intentum loaded",
     "  intentum init [name]       Open Pi and initialize this repository as a project",
-    "  intentum status            Show the project phase and Workers without starting Pi",
+    "  intentum status            Show the next step, attention, work, and project details",
     "  intentum doctor            Check Node, Git, Pi, and the Worker sandbox",
     "  intentum [pi options]      Anything else is passed to pi, e.g. --model sonnet",
     "  intentum --tui-mode regular  Keep Pi's inline mode instead of the fullscreen default",
@@ -330,35 +346,155 @@ async function readProjectState(cwd) {
   }
 }
 
+/**
+ * State fields can contain repository-authored text. Keep the companion
+ * command plain, single-line, and safe to paste into logs without splitting
+ * grapheme clusters or allowing terminal escape sequences through.
+ */
+function plainStatusText(value, fallback) {
+  if (typeof value !== "string" || value.length === 0) return fallback;
+  return value
+    .replace(/\u001B\][^\u0007]*(?:\u0007|\u001B\\)?/gu, "")
+    .replace(/(?:\u001B\[|\u009B)[0-?]*[ -/]*[@-~]/gu, "")
+    .replace(/\u001B[()][0-2A-Z0-9]/gu, "")
+    .replace(/[\u0000-\u001F\u007F-\u009F]+/gu, " ")
+    .replace(/\s{2,}/gu, " ")
+    .trim() || fallback;
+}
+
+function statusObjects(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? Object.values(value).filter((item) => item && typeof item === "object")
+    : [];
+}
+
+function sortedStatusWorkers(state) {
+  return statusObjects(state.workers).sort((left, right) => {
+    const byTime = plainStatusText(right.updatedAt, "").localeCompare(plainStatusText(left.updatedAt, ""));
+    return byTime || plainStatusText(left.id, "?").localeCompare(plainStatusText(right.id, "?"));
+  });
+}
+
+function statusDecisions(state) {
+  return Array.isArray(state.pendingDecisions)
+    ? state.pendingDecisions.filter((item) => item && typeof item === "object")
+    : [];
+}
+
+function statusPhaseLabel(state) {
+  if (state.phase === "paused") {
+    const before = ACTIVE_PROJECT_PHASES.includes(state.phaseBeforePause) ? state.phaseBeforePause : undefined;
+    if (!before) return "PAUSED";
+    return `PAUSED (${before} ${ACTIVE_PROJECT_PHASES.indexOf(before) + 1}/${ACTIVE_PROJECT_PHASES.length})`;
+  }
+  const phase = plainStatusText(state.phase, "unknown");
+  const index = ACTIVE_PROJECT_PHASES.indexOf(phase);
+  return index >= 0 ? `${phase.toUpperCase()} ${index + 1}/${ACTIVE_PROJECT_PHASES.length}` : phase.toUpperCase();
+}
+
+function workerPresentation(worker) {
+  const status = plainStatusText(worker.status, "unknown");
+  return WORKER_PRESENTATION[status] ?? { glyph: "?", label: status === "unknown" ? "Unknown" : status };
+}
+
+function workerStatusLine(worker) {
+  const presentation = workerPresentation(worker);
+  const id = plainStatusText(worker.id, "?");
+  const detail = plainStatusText(worker.blocker ?? worker.progressSummary ?? worker.objective, "No update yet");
+  return `  ${presentation.glyph} ${id} · ${presentation.label} · ${detail}`;
+}
+
+function decisionStatusLine(decision) {
+  const blocking = decision.blocking === true;
+  const id = plainStatusText(decision.id, "?");
+  const title = plainStatusText(decision.title, "Untitled decision");
+  return `  ${blocking ? "◆" : "◇"} ${id} · ${blocking ? "Decision required" : "Open decision"} · ${title}`;
+}
+
+function statusNextStep(state, workers, decisions) {
+  if (state.phase === "paused") return "Project is paused. Resume it when you are ready.";
+
+  const blocking = decisions.find((decision) => decision.blocking === true);
+  if (blocking) return `Answer decision ${plainStatusText(blocking.id, "?")} so blocked work can continue.`;
+
+  const risk = workers.find((worker) => worker.status === "failed")
+    ?? workers.find((worker) => worker.status === "blocked")
+    ?? workers.find((worker) => worker.status === "interrupted");
+  if (risk?.status === "failed") return `${plainStatusText(risk.id, "?")} failed. Inspect the evidence before retrying or replacing the work.`;
+  if (risk?.status === "blocked") return `${plainStatusText(risk.id, "?")} is blocked. Resolve the blocker or give it a targeted instruction.`;
+  if (risk?.status === "interrupted") return `${plainStatusText(risk.id, "?")} was interrupted. Inspect preserved work before resuming it.`;
+
+  const completed = workers.find((worker) => worker.status === "completed");
+  if (completed) return `Review ${plainStatusText(completed.id, "?")}'s result and integrate it when the evidence is sufficient.`;
+
+  const verifying = workers.find((worker) => worker.status === "verifying");
+  if (verifying) return `${plainStatusText(verifying.id, "?")} is verifying its result. Review the evidence when verification completes.`;
+
+  const active = workers.find((worker) => ["starting", "working", "pause_requested"].includes(worker.status));
+  if (active) {
+    const label = workerPresentation(active).label.toLowerCase();
+    return `${plainStatusText(active.id, "?")} is ${label}. Keep shaping the product or steer it with a targeted instruction.`;
+  }
+
+  const paused = workers.find((worker) => worker.status === "paused");
+  if (paused) {
+    return `${plainStatusText(paused.id, "?")} is paused. Resume it or give it a targeted instruction.`;
+  }
+
+  if (state.phase === "discovery") {
+    return "Shape the charter from repository evidence, then confirm only the decisions the code cannot answer.";
+  }
+  return "Describe the next outcome in chat; the Designer will turn it into focused work.";
+}
+
 async function showStatus({ stdout, stderr, env, cwd }) {
   const { exists, path, state, error } = await readProjectState(cwd);
   const prefix = mark(env);
   if (!exists) {
     stderr.write([
-      `${prefix} intentum · no project in ${cwd}`,
+      `${prefix} intentum · no project in ${plainStatusText(cwd, "this directory")}`,
       "Run `intentum init [name]` from the repository root to create one.",
       "",
     ].join("\n"));
     return 1;
   }
   if (error || !state || typeof state !== "object") {
-    stderr.write(`${prefix} intentum · ${path} could not be read: ${error ?? "not a JSON object"}\n`);
+    stderr.write(`${prefix} intentum · ${plainStatusText(path, ".intentum/state.json")} could not be read: ${plainStatusText(error, "not a JSON object")}\n`);
     return 1;
   }
 
-  const workers = Object.values(state.workers ?? {});
+  const workers = sortedStatusWorkers(state);
+  const decisions = statusDecisions(state);
+  const attentionWorkers = workers.filter((worker) => ATTENTION_WORKER_STATUSES.has(worker.status));
+  const work = workers.filter((worker) => !ATTENTION_WORKER_STATUSES.has(worker.status));
+  const blockingDecisions = decisions.filter((decision) => decision.blocking === true);
+  const openDecisions = decisions.filter((decision) => decision.blocking !== true);
+  const attention = [
+    ...blockingDecisions.map(decisionStatusLine),
+    ...attentionWorkers.filter((worker) => worker.status === "failed").map(workerStatusLine),
+    ...attentionWorkers.filter((worker) => worker.status === "blocked").map(workerStatusLine),
+    ...attentionWorkers.filter((worker) => worker.status === "interrupted").map(workerStatusLine),
+    ...attentionWorkers.filter((worker) => worker.status === "completed").map(workerStatusLine),
+    ...attentionWorkers.filter((worker) => worker.status === "integrated").map(workerStatusLine),
+    ...openDecisions.map(decisionStatusLine),
+  ];
   const lines = [
-    `${prefix} intentum · ${state.projectName ?? "unnamed project"}`,
-    `  phase       ${state.phase ?? "unknown"}${state.schedulerPaused ? " (paused)" : ""}`,
-    `  autonomy    ${state.autonomy ?? "unknown"}`,
-    `  feature     ${state.activeFeatureId ?? "none"}`,
-    `  decisions   ${Array.isArray(state.pendingDecisions) ? state.pendingDecisions.length : 0} pending`,
-    `  updated     ${state.updatedAt ?? "unknown"}`,
+    `${prefix} intentum · ${plainStatusText(state.projectName, "unnamed project")}`,
     "",
-    workers.length ? "Workers:" : "Workers: none started yet",
-    ...workers.map((worker) => (
-      `  ${worker.id ?? "?"}  ${worker.status ?? "unknown"}  ${worker.progressSummary ?? worker.objective ?? ""}`.trimEnd()
-    )),
+    "NEXT",
+    `  ${statusNextStep(state, workers, decisions)}`,
+    "",
+    "ATTENTION & RESULTS",
+    ...(attention.length ? attention : ["  None."]),
+    "",
+    "WORK",
+    ...(work.length ? work.map(workerStatusLine) : ["  No work in progress."]),
+    "",
+    "PROJECT",
+    `  Phase: ${statusPhaseLabel(state)}`,
+    `  Feature: ${plainStatusText(state.activeFeatureId, "none")}`,
+    `  Autonomy: ${plainStatusText(state.autonomy, "unknown")}`,
+    `  Updated: ${plainStatusText(state.updatedAt, "unknown")}`,
     "",
     "Run `intentum` to continue in Pi.",
   ];

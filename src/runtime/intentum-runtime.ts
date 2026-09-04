@@ -15,7 +15,8 @@ import { IntegrationManager } from "../git/integration-manager.js";
 import { PiWorkerRuntimeFactory } from "./pi-worker-runtime.js";
 import { WorkerManager, type NewWorkContract } from "../work/worker-manager.js";
 import type { WorkerRuntimeFactory } from "./worker-runtime.js";
-import { renderStatusText, renderStatusWidget, summarizeWorkers } from "../tui/status-widget.js";
+import { renderStatusText, renderStatusWidget, statusWidgetStyleFromTheme } from "../tui/status-widget.js";
+import { deriveHarnessPresentation } from "../tui/presentation.js";
 import { intentumLabel } from "../tui/brand.js";
 import { acquireFileLease, type FileLease } from "../utils/file-lock.js";
 import { assertRepositoryOwnedPath, ensureRepositoryOwnedDirectory } from "../utils/safe-path.js";
@@ -399,9 +400,22 @@ ${JSON.stringify(decisions)}
     }
     if (!this.ui) return;
     try {
-      const lines = renderStatusWidget(state, { color: this.uiMode === "tui" });
+      const lines = renderStatusWidget(state);
       // An idle project shows nothing above the editor; an empty widget would still take a row.
-      this.ui.setWidget("intentum", lines.length ? lines : undefined, { placement: "aboveEditor" });
+      if (!lines.length) {
+        this.ui.setWidget("intentum", undefined, { placement: "aboveEditor" });
+      } else if (this.uiMode === "tui") {
+        this.ui.setWidget("intentum", (_tui, theme) => ({
+          render: (width: number) => renderStatusWidget(state, {
+            style: statusWidgetStyleFromTheme(theme),
+            width: Math.max(1, width),
+          }),
+          invalidate() {},
+        }), { placement: "aboveEditor" });
+      } else {
+        // RPC/JSON hosts only receive plain text, never terminal escapes.
+        this.ui.setWidget("intentum", lines, { placement: "aboveEditor" });
+      }
     } catch {
       // UI is an observer of canonical state, never a lifecycle gate.
     }
@@ -426,10 +440,12 @@ function boundedUntrustedText(value: string, maximum: number): string {
 
 /** One footer line: identity, phase, and only the counts that need a glance. */
 function statusLineText(state: ProjectState): string {
-  const summary = summarizeWorkers(Object.values(state.workers));
-  const parts = [`${intentumLabel()} · ${state.phase}`];
-  if (summary.active.length) parts.push(`${summary.active.length} worker${summary.active.length === 1 ? "" : "s"}`);
-  if (summary.attention.length) parts.push(`⚠ ${summary.attention.length}`);
-  if (state.pendingDecisions.some((decision) => decision.blocking)) parts.push("◆ decision");
+  const model = deriveHarnessPresentation(state);
+  const blocking = state.pendingDecisions.filter((decision) => decision.blocking).length;
+  const parts = [`${intentumLabel()} · ${model.phase.label}`];
+  if (blocking) parts.push(`◆ ${blocking} decision${blocking === 1 ? "" : "s"}`);
+  if (model.counts.attention) parts.push(`⚠ ${model.counts.attention} attention`);
+  if (model.counts.active) parts.push(`● ${model.counts.active} active`);
+  if (model.counts.review) parts.push(`✓ ${model.counts.review} review`);
   return parts.join(" · ");
 }

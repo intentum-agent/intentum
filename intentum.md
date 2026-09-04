@@ -1971,7 +1971,7 @@ intentum 只添加：
 - 顶部或 editor 上方的 compact status widget；
 - intentum footer；
 - decision card；
-- control-center overlay；
+- 临时 control-center workspace；
 - Worker、QA 和 checkpoint 的折叠消息。
 
 不要做永久 sidebar。
@@ -2029,31 +2029,16 @@ banner 只出现一次，之后界面只用 `⋗`（U+22D7）作为 intentum 的
 
 ## 15.3 Focus View
 
-默认界面：
+默认聊天界面保持安静：footer 优先保留 phase、blocking decision 与异常数量，空间允许时再显示 identity 和其他 session 信息。editor 上方只在以下情况出现 attention widget：blocking decision、failed/blocked/interrupted Worker、等待 review 的完成结果。顺序固定为 decision → failure/blocker → review result。
 
-```text
- intentum · my-app                 BUILD 4/7
- Feature: Onboarding
+`/intentum` 打开临时 command center。Overview 顺序固定为：
 
- ✓ Account creation complete
- ✓ Core flow tests passed
- ⚠ Mobile overflow being fixed
+1. 唯一明确的 next step 与 primary action；
+2. attention 与等待 review 的结果；
+3. active work；
+4. phase、feature、autonomy 等 project context。
 
- 3 workers active · no decision required
- [preview] [review] [workers] [pause]
-
-────────────────────────────────────────────
-> Make the onboarding feel less formal...
-```
-
-默认只显示：
-
-1. 当前 phase；
-2. 当前 feature；
-3. 最近完成结果；
-4. 风险或 blocker；
-5. 是否需要用户决定；
-6. 几个相关操作。
+Phase 不显示不可读的全流程缩写，只显示 previous → current → next 和 `4/8`。
 
 ------
 
@@ -2079,49 +2064,14 @@ Worker 活动摘要
 
 ------
 
-## 15.5 三种信息密度
+## 15.5 响应式信息密度
 
-### Focus
+- **Wide（≥100×22）**：fullscreen 双栏 workspace，attention/results 与 active work 并列；Workers/Decisions 使用列表 + detail。
+- **Compact（≥60×16）**：fullscreen 单栏 workspace，保持相同优先级并允许纵向滚动。
+- **Fallback（更小）**：不发布残缺 overlay，显示纯文本 status 与可用 slash commands。
+- **Regular mode**：使用最大 100 列的居中面板，保留整行点击、滚轮和点击外部关闭；fullscreen 保持键盘优先。
 
-默认。
-
-显示：
-
-- 当前目标；
-- 用户需要决定的事情；
-- checkpoint；
-- QA 摘要；
-- Worker 总数。
-
-### Standard
-
-增加：
-
-- 每个 Worker 的一句状态；
-- 当前测试；
-- 最近集成；
-- feature progress。
-
-### Debug
-
-显示：
-
-- session refs；
-- model；
-- worktree；
-- token/cost；
-- tool execution；
-- process logs；
-- Git state；
-- raw failure packets。
-
-切换：
-
-```text
-/intentum view focus
-/intentum view standard
-/intentum view debug
-```
+所有 clipping、padding 与 wrapping 都按 terminal cell 和 grapheme 计算，不能切坏 CJK 或 emoji。焦点只能落在当前 viewport 内真实可见的 control 上。
 
 ------
 
@@ -2145,14 +2095,17 @@ Blocker: needs decision D-004.
 [Enter: details] [T: talk] [S: steer] [Esc: close]
 ```
 
-进入 details 后才看：
+Worker details 按需读取，优先显示：
 
-- contract；
-- branch；
-- changed files；
-- tests；
-- session history；
-- full logs。
+- outcome summary；
+- user-visible changes；
+- test evidence；
+- remaining risks 与 architecture concerns；
+- suggested follow-ups。
+
+branch、worktree、commit、session ref 等技术字段放在最后。加载、失败与重试必须在面板内有明确状态。
+
+Designer streaming、active Worker 与 panel action 只使用低强度、具有状态含义的 pulse/spinner；`INTENTUM_REDUCED_MOTION=1` 时全部退化为静态 glyph。
 
 ------
 

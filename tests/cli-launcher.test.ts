@@ -283,19 +283,81 @@ describe("intentum status", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it("prints the project summary and Workers from state.json without starting Pi", async () => {
+  it("prints next steps, attention, work, and project details without ANSI or broken CJK text", async () => {
     await mkdir(join(root, ".intentum"));
     await writeFile(join(root, ".intentum", "state.json"), JSON.stringify({
       schemaVersion: 1,
       projectId: "p1",
-      projectName: "Status Fixture",
-      phase: "building",
+      projectName: "状态中心 🚀",
+      phase: "build",
       autonomy: "balanced",
       activeFeatureId: "F-001",
       workers: {
-        "W-001": { id: "W-001", status: "working", objective: "Ship it", progressSummary: "Tests green" },
+        "W-001": {
+          id: "W-001",
+          status: "working",
+          objective: "实现登录",
+          progressSummary: "正在实现登录 👩‍💻\n  核心流程已完成",
+          updatedAt: "2026-09-03T01:00:00.000Z",
+        },
+        "W-002": {
+          id: "W-002",
+          status: "completed",
+          objective: "验证登录",
+          progressSummary: "3 项测试通过 ✅",
+          updatedAt: "2026-09-03T02:00:00.000Z",
+        },
+        "W-003": {
+          id: "W-003",
+          status: "failed",
+          objective: "发布登录",
+          progressSummary: "构建日志已保留",
+          updatedAt: "2026-09-03T03:00:00.000Z",
+        },
       },
-      pendingDecisions: [{}],
+      pendingDecisions: [{ id: "D-001", title: "\u001b[31m身份验证方式\u001b[0m", blocking: true }],
+      schedulerPaused: false,
+      updatedAt: "2026-09-03T00:00:00.000Z",
+    }), "utf8");
+    const stdout = captureStream();
+    const code = await runCli(["status"], {
+      stdout,
+      stderr: captureStream(),
+      env: { FORCE_COLOR: "1" },
+      cwd: root,
+    });
+    expect(code).toBe(0);
+    expect(stdout.output).toContain("⋗ intentum · 状态中心 🚀");
+    expect(stdout.output).toContain("NEXT\n  Answer decision D-001 so blocked work can continue.");
+    expect(stdout.output).toContain([
+      "ATTENTION & RESULTS",
+      "  ◆ D-001 · Decision required · 身份验证方式",
+      "  ✕ W-003 · Failed · 构建日志已保留",
+      "  ✓ W-002 · Ready for review · 3 项测试通过 ✅",
+    ].join("\n"));
+    expect(stdout.output).toContain("WORK\n  ● W-001 · Working · 正在实现登录 👩‍💻 核心流程已完成");
+    expect(stdout.output).toContain("PROJECT\n  Phase: BUILD 4/8\n  Feature: F-001\n  Autonomy: balanced");
+    expect(stdout.output).not.toMatch(/\u001b|\u009b/);
+  });
+
+  it("uses the canonical neutral paused phase and next-step wording", async () => {
+    await mkdir(join(root, ".intentum"));
+    await writeFile(join(root, ".intentum", "state.json"), JSON.stringify({
+      schemaVersion: 1,
+      projectId: "p1",
+      projectName: "Paused Fixture",
+      phase: "paused",
+      phaseBeforePause: "build",
+      autonomy: "guided",
+      workers: {
+        "W-001": {
+          id: "W-001",
+          status: "pause_requested",
+          objective: "Stop safely",
+          updatedAt: "2026-09-03T00:00:00.000Z",
+        },
+      },
+      pendingDecisions: [{ id: "D-001", title: "Deferred choice", blocking: true }],
       schedulerPaused: true,
       updatedAt: "2026-09-03T00:00:00.000Z",
     }), "utf8");
@@ -307,12 +369,30 @@ describe("intentum status", () => {
       cwd: root,
     });
     expect(code).toBe(0);
-    expect(stdout.output).toContain("⋗ intentum · Status Fixture");
-    expect(stdout.output).toContain("phase       building (paused)");
-    expect(stdout.output).toContain("autonomy    balanced");
-    expect(stdout.output).toContain("feature     F-001");
-    expect(stdout.output).toContain("decisions   1 pending");
-    expect(stdout.output).toContain("W-001  working  Tests green");
+    expect(stdout.output).toContain("NEXT\n  Project is paused. Resume it when you are ready.");
+    expect(stdout.output).toContain("Phase: PAUSED (build 4/8)");
+    expect(stdout.output).not.toContain("warning");
+  });
+
+  it("puts failed work before a result awaiting review", async () => {
+    await mkdir(join(root, ".intentum"));
+    await writeFile(join(root, ".intentum", "state.json"), JSON.stringify({
+      schemaVersion: 1,
+      projectId: "p1",
+      projectName: "Priority Fixture",
+      phase: "build",
+      autonomy: "balanced",
+      workers: {
+        "W-001": { id: "W-001", status: "completed", objective: "Completed result", updatedAt: "2026-09-03T01:00:00.000Z" },
+        "W-002": { id: "W-002", status: "failed", objective: "Failed work", updatedAt: "2026-09-03T02:00:00.000Z" },
+      },
+      pendingDecisions: [],
+      schedulerPaused: false,
+      updatedAt: "2026-09-03T00:00:00.000Z",
+    }), "utf8");
+    const stdout = captureStream();
+    await runCli(["status"], { stdout, stderr: captureStream(), env: { NO_COLOR: "1" }, cwd: root });
+    expect(stdout.output).toContain("NEXT\n  W-002 failed. Inspect the evidence before retrying or replacing the work.");
   });
 
   it("tells the user to initialize when there is no project", async () => {

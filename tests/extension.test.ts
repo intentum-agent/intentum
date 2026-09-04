@@ -13,6 +13,7 @@ import {
 } from "../src/tools/commands.js";
 import { IntentumRuntime } from "../src/runtime/intentum-runtime.js";
 import { ProjectStore } from "../src/state/project-store.js";
+import type { ProjectState } from "../src/state/schema.js";
 import { BRAND_WIDGET_KEY } from "../src/tui/brand.js";
 import { createTempRepository } from "./helpers/temp-repo.js";
 import { ScriptedWorkerFactory } from "./helpers/scripted-worker.js";
@@ -203,6 +204,50 @@ describe("intentum extension registration", () => {
     }
   });
 
+  it("keeps RPC Worker and decision summaries plain and single-line per item", async () => {
+    const state: ProjectState = {
+      schemaVersion: 1,
+      projectId: "rpc-safe",
+      projectName: "RPC Safe",
+      phase: "build",
+      autonomy: "balanced",
+      workers: {
+        "W-001": {
+          id: "W-001",
+          kind: "implementation",
+          status: "working",
+          objective: "Build the flow",
+          progressSummary: "\u001b[31mWorking\u001b[0m\nInjected",
+          updatedAt: "2026-09-04T00:00:00.000Z",
+        },
+      },
+      pendingDecisions: [{
+        id: "D-001\nInjected",
+        title: "\u001b[33mChoose auth\u001b[0m\nInjected",
+        question: "Which method?",
+        blocking: true,
+        affectedWorkIds: ["W-001"],
+        options: [
+          { id: "a", label: "A", consequence: "A" },
+          { id: "b", label: "B", consequence: "B" },
+        ],
+      }],
+      schedulerPaused: false,
+      updatedAt: "2026-09-04T00:00:00.000Z",
+    };
+    const runtime = {
+      assertContextRoot: async () => undefined,
+      status: async () => ({ state, text: "" }),
+    } as unknown as IntentumRuntime;
+    const harness = createUiHarness("/tmp/intentum-rpc-safe", "rpc");
+
+    await handleIntentumCommand(runtime, "workers", harness.context);
+    expect(harness.notifications.at(-1)?.message).toBe("W-001 · Working · Working Injected");
+    await handleIntentumCommand(runtime, "decisions", harness.context);
+    expect(harness.notifications.at(-1)?.message).toBe("D-001 Injected · Blocking · Choose auth Injected");
+    expect(harness.notifications.map((item) => item.message).join("\n")).not.toContain("\u001b");
+  });
+
   it("claims the one-time RPC welcome before asynchronous asset loading", async () => {
     const fixture = await createTempRepository();
     const runtime = new IntentumRuntime(fixture.repo, {
@@ -339,7 +384,7 @@ describe("intentum extension registration", () => {
       ).toHaveLength(0);
       expect(harness.widgets).toContainEqual({ key: BRAND_WIDGET_KEY, content: undefined });
       expect(harness.statuses.some(
-        (status) => status.key === "intentum" && status.text?.startsWith("⋗ intentum · discovery"),
+        (status) => status.key === "intentum" && status.text?.startsWith("⋗ intentum · DISCOVERY 1/8"),
       )).toBe(true);
 
       await handlers.get("before_agent_start")?.(
@@ -347,6 +392,53 @@ describe("intentum extension registration", () => {
         harness.context,
       );
       expect(harness.widgets.at(-1)).toMatchObject({ key: BRAND_WIDGET_KEY, content: undefined });
+    } finally {
+      await handlers.get("session_shutdown")?.(
+        { type: "session_shutdown", reason: "quit" },
+        harness.context,
+      );
+      await fixture.cleanup();
+    }
+  });
+
+  it("publishes attention as a theme-rendered component in TUI mode", async () => {
+    const fixture = await createTempRepository();
+    const handlers = new Map<string, (event: unknown, context: ExtensionContext) => Promise<unknown>>();
+    const harness = createUiHarness(fixture.repo);
+    const store = new ProjectStore(fixture.repo);
+    await store.initialize({ projectName: "Theme Fixture" });
+    await store.update((state) => ({
+      ...state,
+      workers: {
+        "W-001": {
+          id: "W-001",
+          kind: "implementation",
+          status: "completed",
+          objective: "可见成果 👨‍👩‍👧‍👦",
+          updatedAt: "2026-09-04T00:00:00.000Z",
+        },
+      },
+    }));
+    const fake = {
+      registerCommand() {},
+      registerTool() {},
+      on(event: string, handler: (event: unknown, context: ExtensionContext) => Promise<unknown>) {
+        handlers.set(event, handler);
+      },
+    } as unknown as ExtensionAPI;
+
+    intentumExtension(fake);
+    try {
+      await handlers.get("session_start")?.({ type: "session_start", reason: "resume" }, harness.context);
+      const content = harness.widgets.find((call) => call.key === "intentum" && typeof call.content === "function")?.content;
+      if (typeof content !== "function") throw new Error("expected a themed attention component");
+      const component = content(
+        { requestRender() {} },
+        { fg: (color: string, text: string) => `<${color}>${text}</${color}>` },
+      ) as { render(width: number): string[] };
+      const rendered = component.render(80);
+      expect(rendered).toEqual(["<success>✓ W-001 Ready for review · 可见成果 👨‍👩‍👧‍👦</success>"]);
+      expect(rendered.join("\n")).not.toContain("\u001b[");
     } finally {
       await handlers.get("session_shutdown")?.(
         { type: "session_shutdown", reason: "quit" },

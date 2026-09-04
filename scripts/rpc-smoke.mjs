@@ -91,10 +91,17 @@ try {
   assert(events.some((event) => event.type === "extension_ui_request" && event.method === "notify"
     && typeof event.message === "string" && event.message.includes("initialized RPC Smoke Project")),
     "the init command did not emit its UI notification");
-  assert(events.some((event) => event.type === "extension_ui_request" && event.method === "notify"
-    && typeof event.message === "string" && event.message.includes("Project: RPC Smoke Project")
-    && event.message.includes("Phase: discovery")),
-    "the status command did not report the persisted project and phase");
+  const statusNotification = statusEvents.find((event) => event.type === "extension_ui_request"
+    && event.method === "notify" && event.notifyType === "info");
+  assert(typeof statusNotification?.message === "string",
+    "the status command did not emit its compact info notification");
+  const statusLines = statusNotification.message.split("\n");
+  assert(statusLines[0] === "RPC Smoke Project · DISCOVERY 1/8 · Feature: none yet · autonomy guided",
+    `the status command emitted an unexpected compact heading: ${JSON.stringify(statusNotification.message)}`);
+  assert(statusLines[1]?.startsWith("No Worker yet ·") && statusLines.length === 2,
+    `the empty-project status should be a two-line compact summary: ${JSON.stringify(statusNotification.message)}`);
+  assert(!/\u001b|\u009b/.test(statusNotification.message),
+    "the RPC status notification contained an ANSI escape sequence");
   assert(!events.some((event) => event.type === "extension_error"), "Pi reported an extension_error event");
   assert(!events.some((event) => event.type === "agent_start"), "the command-only smoke unexpectedly invoked a model");
 

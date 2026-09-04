@@ -1,88 +1,112 @@
-import { PROJECT_PHASES, type DecisionRequest, type ProjectState, type WorkerRecord } from "../state/schema.js";
+import type { DecisionRequest, ProjectState, WorkerRecord } from "../state/schema.js";
+import {
+  ACTIVE_WORKER_STATUSES,
+  ATTENTION_WORKER_STATUSES,
+  deriveHarnessPresentation,
+  phaseLabel,
+  sortedWorkers,
+  summarizeWorkers,
+  workerStatusPresentation,
+  type WorkerSummary,
+} from "./presentation.js";
+import { clipSingleLine, clipToCellWidth, singleLine } from "./text-layout.js";
+
+export {
+  ACTIVE_WORKER_STATUSES,
+  ATTENTION_WORKER_STATUSES,
+  phaseLabel,
+  sortedWorkers,
+  summarizeWorkers,
+  workerStatusPresentation,
+  type WorkerSummary,
+} from "./presentation.js";
+
+export interface StatusWidgetStyle {
+  neutral(text: string): string;
+  progress(text: string): string;
+  review(text: string): string;
+  warning(text: string): string;
+  error(text: string): string;
+}
 
 export interface StatusWidgetOptions {
-  /** Emit ANSI styling. Leave off for RPC/JSON hosts that expect plain lines. */
-  color?: boolean;
+  /** Apply host-theme styling after all cell-safe clipping is complete. */
+  style?: StatusWidgetStyle;
+  /** Optional terminal-cell width for every rendered line. */
+  width?: number;
 }
 
-export const ACTIVE_WORKER_STATUSES: readonly WorkerRecord["status"][] = ["starting", "working", "pause_requested", "verifying"];
-export const ATTENTION_WORKER_STATUSES: readonly WorkerRecord["status"][] = ["blocked", "failed", "paused", "interrupted"];
+const PLAIN_STYLE: StatusWidgetStyle = {
+  neutral: (text) => text,
+  progress: (text) => text,
+  review: (text) => text,
+  warning: (text) => text,
+  error: (text) => text,
+};
 
-const ACTIVE_PHASES = PROJECT_PHASES.filter((phase) => phase !== "paused");
 const MAX_RESULT_LINES = 2;
 const MAX_RISK_LINES = 2;
-const BLOCKER_LIMIT = 96;
-
-interface Palette {
-  dim(text: string): string;
-  success(text: string): string;
-  warning(text: string): string;
-  danger(text: string): string;
-}
-
-const PLAIN: Palette = {
-  dim: (text) => text,
-  success: (text) => text,
-  warning: (text) => text,
-  danger: (text) => text,
-};
-
-const ANSI: Palette = {
-  dim: (text) => `\u001b[2m${text}\u001b[22m`,
-  success: (text) => `\u001b[32m${text}\u001b[39m`,
-  warning: (text) => `\u001b[33m${text}\u001b[39m`,
-  danger: (text) => `\u001b[31m${text}\u001b[39m`,
-};
+const DETAIL_WIDTH = 96;
 
 /**
- * Above-editor widget: only what needs attention right now. Identity, phase,
- * and counts live in the footer, so an idle project renders nothing here.
+ * Above-editor attention surface. Ordering is intentional: a blocking user
+ * decision, then failed/blocked work, then results waiting for review.
  */
 export function renderStatusWidget(state: ProjectState, options: StatusWidgetOptions = {}): string[] {
-  const palette = options.color ? ANSI : PLAIN;
-  const summary = summarizeWorkers(sortedWorkers(state));
-  const blocking = state.pendingDecisions.find((decision) => decision.blocking);
+  const style = options.style ?? PLAIN_STYLE;
+  const model = deriveHarnessPresentation(state);
+  const width = options.width === undefined ? undefined : Math.max(1, Math.floor(options.width));
+  const styled = (tone: keyof StatusWidgetStyle, text: string): string => {
+    const clipped = width === undefined ? text : clipToCellWidth(text, width);
+    return style[tone](clipped);
+  };
 
   const lines: string[] = [];
-  for (const worker of summary.results.filter((item) => item.status === "completed").slice(0, MAX_RESULT_LINES)) {
-    lines.push(palette.success(`✓ ${worker.id} ${resultText(worker)}`));
+  if (model.blockingDecision) {
+    lines.push(styled("warning", `◆ Decision required · ${clipSingleLine(model.blockingDecision.title, DETAIL_WIDTH)}`));
   }
-  for (const worker of summary.attention.slice(0, MAX_RISK_LINES)) {
-    lines.push(palette.danger(`⚠ ${worker.id} ${riskText(worker)}`));
+
+  const attention = [...model.workers.attention]
+    .sort((left, right) => attentionRank(left) - attentionRank(right) || right.updatedAt.localeCompare(left.updatedAt));
+  for (const worker of attention.slice(0, MAX_RISK_LINES)) {
+    const status = workerStatusPresentation(worker.status);
+    lines.push(styled(status.tone === "warning" ? "warning" : "error", `${status.glyph} ${worker.id} ${status.label} · ${riskText(worker)}`));
   }
-  if (blocking) lines.push(palette.warning(`◆ Decision required: ${singleLine(blocking.title, BLOCKER_LIMIT)}`));
+
+  for (const worker of model.workers.review.slice(0, MAX_RESULT_LINES)) {
+    const status = workerStatusPresentation(worker.status);
+    lines.push(styled("review", `${status.glyph} ${worker.id} ${status.label} · ${resultText(worker)}`));
+  }
   return lines;
 }
 
-/**
- * Compact status for a notification. Pi renders info notifications dim, so
- * this keeps to a few short lines; the full field-by-field text stays in
- * `renderStatusText` for tool results and non-TUI hosts.
- */
+/** Compact, plain notification copy. RPC and JSON hosts never receive ANSI. */
 export function renderStatusBrief(state: ProjectState): string {
-  const summary = summarizeWorkers(sortedWorkers(state));
-  const lines = [`${state.projectName} · ${phaseLabel(state)} · ${featureLine(state)}`];
-  for (const worker of summary.attention.slice(0, MAX_RISK_LINES)) lines.push(`⚠ ${worker.id} ${riskText(worker)}`);
-  const blocking = state.pendingDecisions.find((decision) => decision.blocking);
-  if (blocking) lines.push(`◆ Decision required: ${singleLine(blocking.title, BLOCKER_LIMIT)}`);
-  lines.push(summaryLine(summary, state, PLAIN));
+  const model = deriveHarnessPresentation(state);
+  const lines = [`${singleLine(state.projectName)} · ${model.phase.label} · ${featureLine(state)}`];
+  lines.push(...renderStatusWidget(state).slice(0, 3));
+  lines.push(summaryLine(model.workers, state, PLAIN_STYLE));
   return lines.join("\n");
 }
 
+/** Complete, plain-text state for commands and non-TUI hosts. */
 export function renderStatusText(state: ProjectState): string {
-  const workers = Object.values(state.workers);
+  const workers = sortedWorkers(state);
   const workerLines = workers.length
-    ? workers.map((worker) => `- ${worker.id} ${worker.status}: ${worker.blocker ?? worker.progressSummary ?? worker.objective}`).join("\n")
+    ? workers.map((worker) => {
+      const status = workerStatusPresentation(worker.status).label;
+      return `- ${worker.id} ${status}: ${singleLine(worker.blocker ?? worker.progressSummary ?? worker.objective)}`;
+    }).join("\n")
     : "- No Worker has been started.";
   const decisions = state.pendingDecisions.length
-    ? state.pendingDecisions.map((decision) => `- ${decision.id} ${decision.blocking ? "blocking" : "open"}: ${decision.title}`).join("\n")
+    ? state.pendingDecisions.map((decision) => `- ${singleLine(decision.id)} ${decision.blocking ? "Blocking" : "Open"}: ${singleLine(decision.title)}`).join("\n")
     : "- No pending decision.";
   return [
-    `Project: ${state.projectName}`,
-    `Phase: ${phaseLabel(state).toLowerCase()}`,
+    `Project: ${singleLine(state.projectName)}`,
+    `Phase: ${phaseLabel(state)}`,
     `Autonomy: ${state.autonomy}`,
-    `Scheduler paused: ${state.schedulerPaused ? "yes" : "no"}`,
-    `Active feature: ${state.activeFeatureId ?? "none"}`,
+    `Scheduler: ${state.schedulerPaused ? "Paused" : "Running"}`,
+    `Active feature: ${state.activeFeatureId ? singleLine(state.activeFeatureId) : "none"}`,
     "Workers:",
     workerLines,
     "Decisions:",
@@ -90,78 +114,58 @@ export function renderStatusText(state: ProjectState): string {
   ].join("\n");
 }
 
-/** `BUILD 4/8`, or `PAUSED (build 4/8)` while the scheduler is stopped. */
-export function phaseLabel(state: ProjectState): string {
-  if (state.phase === "paused") {
-    const before = state.phaseBeforePause;
-    return before ? `PAUSED (${before} ${phaseIndex(before)})` : "PAUSED";
-  }
-  return `${state.phase.toUpperCase()} ${phaseIndex(state.phase)}`;
-}
-
-function phaseIndex(phase: ProjectState["phase"]): string {
-  const index = ACTIVE_PHASES.indexOf(phase as (typeof ACTIVE_PHASES)[number]);
-  return `${index + 1}/${ACTIVE_PHASES.length}`;
-}
-
-function featureLine(state: ProjectState): string {
-  const feature = state.activeFeatureId ? `Feature: ${state.activeFeatureId}` : "Feature: none yet";
-  return `${feature} · autonomy ${state.autonomy}`;
-}
-
-export interface WorkerSummary {
-  active: WorkerRecord[];
-  attention: WorkerRecord[];
-  results: WorkerRecord[];
-  queued: WorkerRecord[];
-}
-
-export function summarizeWorkers(workers: readonly WorkerRecord[]): WorkerSummary {
+export function statusWidgetStyleFromTheme(theme: {
+  fg(color: "dim" | "accent" | "success" | "warning" | "error", text: string): string;
+}): StatusWidgetStyle {
   return {
-    active: workers.filter((worker) => ACTIVE_WORKER_STATUSES.includes(worker.status)),
-    attention: workers.filter((worker) => ATTENTION_WORKER_STATUSES.includes(worker.status)),
-    results: workers.filter((worker) => worker.status === "completed" || worker.status === "integrated"),
-    queued: workers.filter((worker) => worker.status === "queued"),
+    neutral: (text) => theme.fg("dim", text),
+    progress: (text) => theme.fg("accent", text),
+    review: (text) => theme.fg("success", text),
+    warning: (text) => theme.fg("warning", text),
+    error: (text) => theme.fg("error", text),
   };
 }
 
-/** Newest first, so the widget surfaces the latest change rather than W-001 forever. */
-export function sortedWorkers(state: ProjectState): WorkerRecord[] {
-  return Object.values(state.workers).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
+function featureLine(state: ProjectState): string {
+  const feature = state.activeFeatureId ? `Feature: ${singleLine(state.activeFeatureId)}` : "Feature: none yet";
+  return `${feature} · autonomy ${state.autonomy}`;
 }
 
 function resultText(worker: WorkerRecord): string {
-  return `${singleLine(worker.objective, 72)} — ready to integrate`;
+  return clipSingleLine(worker.progressSummary ?? worker.objective, 72);
 }
 
 function riskText(worker: WorkerRecord): string {
-  const detail = worker.blocker ? singleLine(worker.blocker, BLOCKER_LIMIT) : singleLine(worker.objective, 72);
-  return `${worker.status}: ${detail}`;
+  return clipSingleLine(worker.blocker ?? worker.progressSummary ?? worker.objective, DETAIL_WIDTH);
 }
 
-function summaryLine(summary: WorkerSummary, state: ProjectState, palette: Palette): string {
+function summaryLine(summary: WorkerSummary, state: ProjectState, style: StatusWidgetStyle): string {
   const total = Object.keys(state.workers).length;
   if (total === 0) {
-    return palette.dim("No Worker yet · describe the outcome you want in chat and the Designer will plan the work");
+    return style.neutral("No Worker yet · describe the outcome you want in chat and the Designer will plan the work");
   }
   const parts = [
-    `● ${summary.active.length} active`,
-    palette.success(`✓ ${summary.results.length} done`),
-    summary.attention.length ? palette.danger(`⚠ ${summary.attention.length} need attention`) : "⚠ 0 need attention",
+    style.progress(`● ${summary.active.length} in progress`),
+    style.review(`✓ ${summary.review.length} ready for review`),
+    summary.attention.length
+      ? style.error(`⚠ ${summary.attention.length} need${summary.attention.length === 1 ? "s" : ""} attention`)
+      : "⚠ 0 need attention",
   ];
-  if (summary.queued.length) parts.push(`◌ ${summary.queued.length} queued`);
-  parts.push(decisionText(state.pendingDecisions, palette));
+  if (summary.paused.length) parts.push(style.neutral(`○ ${summary.paused.length} paused`));
+  if (summary.queued.length) parts.push(style.neutral(`◌ ${summary.queued.length} queued`));
+  parts.push(decisionText(state.pendingDecisions, style));
   return parts.join(" · ");
 }
 
-function decisionText(decisions: readonly DecisionRequest[], palette: Palette): string {
+function decisionText(decisions: readonly DecisionRequest[], style: StatusWidgetStyle): string {
   const blocking = decisions.filter((decision) => decision.blocking).length;
-  if (blocking > 0) return palette.warning(`◆ ${blocking} decision${blocking === 1 ? "" : "s"} required`);
+  if (blocking > 0) return style.warning(`◆ ${blocking} decision${blocking === 1 ? "" : "s"} required`);
   if (decisions.length > 0) return `◇ ${decisions.length} open decision${decisions.length === 1 ? "" : "s"}`;
   return "no blocking decision";
 }
 
-function singleLine(value: string, limit: number): string {
-  const collapsed = value.replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim();
-  return collapsed.length <= limit ? collapsed : `${collapsed.slice(0, limit - 1)}…`;
+function attentionRank(worker: WorkerRecord): number {
+  if (worker.status === "failed") return 0;
+  if (worker.status === "blocked") return 1;
+  return 2;
 }

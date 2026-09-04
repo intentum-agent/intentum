@@ -9,6 +9,8 @@ import type { ProjectState, WorkerRecord } from "../state/schema.js";
 import { openControlPanel } from "./control-panel-host.js";
 import type { PanelTab } from "../tui/control-panel.js";
 import { renderStatusBrief } from "../tui/status-widget.js";
+import { workerStatusPresentation } from "../tui/presentation.js";
+import { singleLine } from "../tui/text-layout.js";
 import {
   BRAND_WIDGET_KEY,
   type BrandAssets,
@@ -47,11 +49,12 @@ export function registerIntentumCommands(pi: ExtensionAPI, runtimeSource: Intent
  * A project named after the tool itself would read "intentum initialized intentum".
  */
 function initMessage(projectName: string, created: boolean): string {
+  const safeName = singleLine(projectName);
   const tail = created ? "in discovery phase." : "existing artifacts were preserved.";
-  if (projectName.trim().toLowerCase() === "intentum") {
+  if (safeName.toLowerCase() === "intentum") {
     return created ? `Project intentum initialized ${tail}` : `Project intentum is already initialized; ${tail}`;
   }
-  return created ? `intentum initialized ${projectName} ${tail}` : `intentum already initialized ${projectName}; ${tail}`;
+  return created ? `intentum initialized ${safeName} ${tail}` : `intentum already initialized ${safeName}; ${tail}`;
 }
 
 function resolveRuntime(source: IntentumRuntimeSource): IntentumRuntime {
@@ -88,7 +91,9 @@ export async function handleIntentumCommand(
       const workers = Object.values(state.workers);
       ctx.ui.notify(
         workers.length
-          ? workers.map((worker) => `${worker.id} · ${worker.status} · ${worker.progressSummary ?? worker.objective}`).join("\n")
+          ? workers.map((worker) => (
+              `${worker.id} · ${workerStatusPresentation(worker.status).label} · ${singleLine(worker.progressSummary ?? worker.objective)}`
+            )).join("\n")
           : "No Worker has been started.",
         "info",
       );
@@ -103,7 +108,9 @@ export async function handleIntentumCommand(
       const decisions = state.pendingDecisions;
       ctx.ui.notify(
         decisions.length
-          ? decisions.map((decision) => `${decision.id} · ${decision.blocking ? "blocking" : "open"} · ${decision.title}`).join("\n")
+          ? decisions.map((decision) => (
+              `${singleLine(decision.id)} · ${decision.blocking ? "Blocking" : "Open"} · ${singleLine(decision.title)}`
+            )).join("\n")
           : "No pending decision.",
         "info",
       );
