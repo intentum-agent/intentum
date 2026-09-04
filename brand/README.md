@@ -18,7 +18,7 @@ aimed at. Two independently made parts, joined where the goal sits.
 | `intentum-wordmark.svg`, `-dark`, `-mono` | Wordmark alone. The point moves to the `i`. |
 | `intentum-logo.svg`, `-dark`, `-mono` | Horizontal lockup, mark + wordmark. The default logo. |
 | `intentum-logo-stacked.svg`, `-dark` | Stacked lockup for square-ish spaces. |
-| `png/` | Raster exports: tile 128–1024, favicon 16–64, mark 512, lockups 1200–2400 wide. |
+| `png/` | Raster exports: tile 128–1024 (rounded and `-square`), favicon 16–64, mark 512, lockups 1200–2400 wide. |
 | `ascii/` | Terminal versions in two sizes: `logo-*.txt` (mark), `text-*.txt` (wordmark), `banner-*.txt` (lockup). See [ASCII](#ascii). |
 
 All SVGs carry a `viewBox` and scale freely. The `-mono` files set `fill="currentColor"`
