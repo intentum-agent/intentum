@@ -5,6 +5,7 @@ import { IntentumModelPicker, modelKey, type PickerModel } from "../tui/model-pi
 import { singleLine } from "../tui/text-layout.js";
 import { centeredOverlayOrigin } from "../tui/control-panel.js";
 import { installOverlayMouse } from "../tui/overlay-mouse.js";
+import { installPromptMouse } from "../tui/prompt-mouse.js";
 import { ProviderPinStore } from "../state/provider-pins.js";
 
 export function modelPickerSize(columns: number, rows: number): { width: number; height: number } {
@@ -158,6 +159,7 @@ export async function openModelPicker(pi: Pick<ExtensionAPI, "setModel">, ctx: E
 export function registerModelPicker(pi: ExtensionAPI): void {
   let opening = false;
   let restoreEditor: (() => void) | undefined;
+  let stopPromptMouse: (() => void) | undefined;
   let submitNative: ((command: string) => Promise<void>) | undefined;
   const open = async (ctx: ExtensionContext, query = "") => {
     if (opening) return;
@@ -189,12 +191,16 @@ export function registerModelPicker(pi: ExtensionAPI): void {
     if (ctx.mode !== "tui" || typeof ctx.ui.setEditorComponent !== "function") return;
     const previous = ctx.ui.getEditorComponent?.();
     const factory: NonNullable<ReturnType<typeof ctx.ui.getEditorComponent>> = (tui, theme, keybindings) => {
+      stopPromptMouse?.();
       const editor = previous?.(tui, theme, keybindings) ?? new CustomEditor(tui, theme, keybindings);
+      stopPromptMouse = installPromptMouse(tui, editor);
       submitNative = wireModelPickerEditor(editor, (data) => keybindings.matches(data, "app.model.select"), (query) => { void open(ctx, query); });
       return editor;
     };
     ctx.ui.setEditorComponent(factory);
     restoreEditor = () => {
+      stopPromptMouse?.();
+      stopPromptMouse = undefined;
       if (ctx.ui.getEditorComponent?.() === factory) ctx.ui.setEditorComponent(previous);
     };
   });

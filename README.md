@@ -115,6 +115,11 @@ default; Pi's `fullscreenExitOutput` setting (`/settings` inside Pi) switches th
 short resume hint. The launcher never talks to a model itself. Pi owns model/provider authentication and session transcripts;
 Intentum stores only the Pi session reference and does not copy transcripts into `.intentum/`.
 
+In fullscreen mode, click within the prompt text to move the editing cursor there.
+Positioning follows wrapped and multiline text, including Chinese and emoji; clicking
+past the text moves to the end of that displayed line. Transcript mouse controls and
+overlay controls remain available outside the prompt.
+
 `intentum status` is deliberately plain text with no ANSI styling. It leads with the
 next step, then work needing attention, current work, and project details; repository
 text stays on one line without truncating CJK text or emoji.
