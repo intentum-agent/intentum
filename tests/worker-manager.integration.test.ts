@@ -78,6 +78,58 @@ describe("single Worker vertical slice", () => {
     }
   });
 
+  it("starts on a new clean branch from HEAD while preserving staged, unstaged, and untracked target changes", async () => {
+    const fixture = await createTempRepository();
+    const factory = new ScriptedWorkerFactory();
+    const runtime = new IntentumRuntime(fixture.repo, { cacheRoot: fixture.cache, workerRuntimeFactory: factory, projectTrusted: true });
+    try {
+      await runtime.initialize();
+      const baseCommit = (await runFile("git", ["rev-parse", "HEAD"], fixture.repo)).stdout;
+      const committedReadme = await readFile(join(fixture.repo, "README.md"), "utf8");
+      await writeFile(join(fixture.repo, "README.md"), "staged draft\n", "utf8");
+      await runFile("git", ["add", "README.md"], fixture.repo);
+      await writeFile(join(fixture.repo, "README.md"), "unstaged draft\n", "utf8");
+      await writeFile(join(fixture.repo, "local-note.txt"), "untracked draft\n", "utf8");
+      const targetStatus = (await runFile("git", ["status", "--porcelain=v1", "--", "README.md", "local-note.txt"], fixture.repo)).stdout;
+      const targetIndex = (await runFile("git", ["write-tree"], fixture.repo)).stdout;
+
+      const worker = await runtime.createWork(CONTRACT);
+      expect(worker).toMatchObject({
+        status: "working", branch: "intentum/F-001/W-001", targetBranch: "main", baseCommit,
+      });
+      const create = factory.creates[0];
+      if (!create || !worker.worktreePath) throw new Error("scripted Worker was not created");
+      expect((await runFile("git", ["branch", "--show-current"], worker.worktreePath)).stdout).toBe(worker.branch);
+      expect((await runFile("git", ["rev-parse", "HEAD"], worker.worktreePath)).stdout).toBe(baseCommit);
+      expect((await runFile("git", ["status", "--porcelain=v1"], worker.worktreePath)).stdout).toBe("");
+      expect(await readFile(join(worker.worktreePath, "README.md"), "utf8")).toBe(committedReadme);
+      await expect(access(join(worker.worktreePath, "local-note.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+
+      await writeFile(join(worker.worktreePath, "greeting.txt"), "hello from intentum\n", "utf8");
+      await create.callbacks.commit({ message: "feat: isolated greeting" });
+      await create.callbacks.complete({
+        status: "completed", summary: "Greeting implemented independently of local drafts.",
+        userVisibleChanges: ["Added greeting.txt."], filesChanged: ["greeting.txt"],
+        testsRun: [], architectureConcerns: [], remainingRisks: [], suggestedFollowUps: [],
+      });
+      factory.runtimes.get(worker.id)?.emit({ type: "settled" });
+      await expect.poll(async () => (await runtime.workers.inspect(worker.id)).worker.status).toBe("completed");
+      await expect(runtime.workers.integrateWorker(worker.id)).rejects.toThrow("unrelated changes");
+      expect((await runtime.workers.inspect(worker.id)).worker.status).toBe("completed");
+
+      expect((await runFile("git", ["branch", "--show-current"], fixture.repo)).stdout).toBe("main");
+      expect((await runFile("git", ["rev-parse", "HEAD"], fixture.repo)).stdout).toBe(baseCommit);
+      expect((await runFile("git", ["write-tree"], fixture.repo)).stdout).toBe(targetIndex);
+      expect((await runFile("git", ["status", "--porcelain=v1", "--", "README.md", "local-note.txt"], fixture.repo)).stdout).toBe(targetStatus);
+      expect(await readFile(join(fixture.repo, "README.md"), "utf8")).toBe("unstaged draft\n");
+      expect(await readFile(join(fixture.repo, "local-note.txt"), "utf8")).toBe("untracked draft\n");
+      await expect(access(join(fixture.repo, "greeting.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await runtime.dispose();
+      await fixture.cleanup();
+    }
+  });
+
   it("does not accept a completed result from a dirty Worker worktree", async () => {
     const fixture = await createTempRepository();
     const factory = new ScriptedWorkerFactory();

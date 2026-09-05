@@ -271,10 +271,10 @@ Typical flow:
 1. Run `intentum init [name]`, or `/init` inside Pi.
 2. Confirm the repo-derived charter and approved architecture direction.
 3. The Designer submits one broad `intentum_create_work` contract.
-4. The controller creates `intentum/F-001/W-001` in an external worktree.
+4. The controller creates a new branch such as `intentum/F-001/W-001` from the current committed `HEAD` in an external worktree. Staged, unstaged, and untracked changes in the target directory stay in place and do not block Worker startup; they are not copied into the Worker. Commit any changes the task depends on before starting it.
 5. The Worker inspects, implements, tests, commits, and submits a structured result.
 6. The controller independently verifies the branch, clean worktree, ancestry, protected paths, result commit, and actual diff.
-7. The Human or Designer explicitly invokes integration.
+7. The Human or Designer explicitly invokes integration, which still requires the target worktree to be clean apart from controller-owned state.
 
 ## Commands
 

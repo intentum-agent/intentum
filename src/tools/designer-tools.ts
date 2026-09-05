@@ -56,7 +56,7 @@ export function registerDesignerTools(pi: ExtensionAPI, runtimeSource: IntentumR
   pi.registerTool(defineTool({
     name: "intentum_create_work",
     label: "intentum create work",
-    description: "Create and start one broad outcome-based WorkContract in an independent Pi Worker and Git worktree.",
+    description: "Create and start one broad outcome-based WorkContract in an independent Pi Worker, with a new branch and Git worktree from committed HEAD. Uncommitted target changes stay in place and do not block startup or enter the Worker worktree.",
     promptSnippet: "Use intentum_create_work for a complete vertical slice grounded in existing repository files (touchHints, contextFiles), not a greenfield rewrite or microtasks.",
     executionMode: "sequential",
     renderShell: "self",
@@ -98,7 +98,7 @@ export function registerDesignerTools(pi: ExtensionAPI, runtimeSource: IntentumR
         preferredWorkerKind: params.preferredWorkerKind,
         contextFiles: params.contextFiles,
       });
-      return toolResult(`${worker.id} started in ${worker.worktreePath} on ${worker.branch}.`);
+      return toolResult(`${worker.id} started in ${worker.worktreePath} on new branch ${worker.branch} from commit ${worker.baseCommit}. Target branch: ${worker.targetBranch}. Uncommitted target changes are not included.`);
     },
   }));
 

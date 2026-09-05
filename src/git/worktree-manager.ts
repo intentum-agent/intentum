@@ -4,7 +4,6 @@ import { mkdir, readdir, readFile, realpath, rm } from "node:fs/promises";
 import { assertSafeId } from "../utils/ids.js";
 import { CONTROLLER_OWNED_REPOSITORY_PATHS, isControllerOwnedRepositoryPath } from "../utils/safe-path.js";
 import { runFile } from "../utils/process.js";
-import { unrelatedGitStatus } from "./status.js";
 
 export interface WorktreeRecord {
   path: string;
@@ -41,8 +40,9 @@ export class WorktreeManager {
     assertSafeId(featureId, "feature id");
     assertSafeId(workerId, "worker id");
     const projectPath = await this.assertRepository();
-    await this.assertTargetClean();
-
+    // The new worktree starts from committed HEAD with its own index. Local
+    // staged, unstaged, and untracked changes stay in the target worktree;
+    // only integration needs that worktree to be clean.
     const baseCommit = (await runFile("git", ["rev-parse", "HEAD"], this.projectRoot)).stdout;
     const targetBranch = (await runFile("git", ["branch", "--show-current"], this.projectRoot)).stdout;
     if (!targetBranch) throw new Error("intentum requires the target repository to be on a named branch");
@@ -316,13 +316,6 @@ export class WorktreeManager {
 
   private async headAt(worktreePath: string, signal?: AbortSignal): Promise<string> {
     return (await runFile("git", ["rev-parse", "HEAD"], worktreePath, { signal })).stdout;
-  }
-
-  private async assertTargetClean(): Promise<void> {
-    const status = await unrelatedGitStatus(this.projectRoot);
-    if (status) {
-      throw new Error(`target worktree has unrelated changes; Worker creation stopped:\n${status}`);
-    }
   }
 }
 
