@@ -58,6 +58,8 @@ export const SYMBOL_SETS = Object.freeze({
     output: "\uF08B",
     cost: "\uF155",
     context: "\uE70F",
+    starFilled: "\uF005", // nf-fa-star
+    starOutline: "\uF006", // nf-fa-star_o
     status: Object.freeze({
       success: "\uF00C",
       done: "•",
@@ -89,6 +91,8 @@ export const SYMBOL_SETS = Object.freeze({
     output: "↓",
     cost: "",
     context: "◫",
+    starFilled: "★",
+    starOutline: "☆",
     status: Object.freeze({
       success: "✔",
       done: "•",
@@ -119,6 +123,8 @@ export const SYMBOL_SETS = Object.freeze({
     output: "out:",
     cost: "",
     context: "ctx:",
+    starFilled: "*",
+    starOutline: "+",
     status: Object.freeze({
       success: "[ok]",
       done: "*",
@@ -180,15 +186,19 @@ export function symbolPreset(environment = process.env) {
 }
 
 /**
- * `INTENTUM_SYMBOLS` wins; otherwise Nerd Font icons are used exactly when a
- * Nerd Font is installed or the terminal bundles one, so nobody sees tofu.
+ * `INTENTUM_SYMBOLS` wins; otherwise only terminals that bundle the symbols
+ * enable Nerd Font icons. An installed font does not prove that the terminal
+ * selects it or uses it as a fallback, so plain Unicode is the safe default.
  *
  * @param {import("./nerd-font.d.mts").FontEnvironment} [options]
  * @returns {Promise<SymbolPreset>}
  */
 export async function resolveSymbolPreset(options = {}) {
   const explicit = explicitSymbolPreset(options.env ?? process.env);
-  if (explicit) return explicit;
-  detected = (await detectNerdFont(options)) ? "nerd" : "unicode";
+  if (explicit) {
+    detected = explicit;
+    return explicit;
+  }
+  detected = (await detectNerdFont(options))?.kind === "terminal" ? "nerd" : "unicode";
   return detected;
 }

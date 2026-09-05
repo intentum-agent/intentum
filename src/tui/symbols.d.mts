@@ -50,6 +50,9 @@ export interface SymbolSet {
   /** Empty means the amount carries its own `$` prefix. */
   readonly cost: string;
   readonly context: string;
+  /** Filled/outline stars for provider pin controls. */
+  readonly starFilled: string;
+  readonly starOutline: string;
   /** Tool status icons in transcript headers. */
   readonly status: StatusSymbols;
   /** Live tool spinner frames, advanced in lockstep by the shared ticker. */

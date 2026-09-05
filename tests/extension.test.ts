@@ -42,7 +42,7 @@ describe("intentum extension registration", () => {
     } as unknown as ExtensionAPI;
 
     intentumExtension(fake);
-    expect(commands).toEqual(["intentum", ...INTENTUM_COMMAND_ALIASES.map((alias) => alias.name)]);
+    expect(commands).toEqual(["intentum", ...INTENTUM_COMMAND_ALIASES.map((alias) => alias.name), "models"]);
     expect(commands).toContain("help");
     // Pi's built-in /resume wins dispatch, so project resume is never shadowed by an alias.
     expect(commands).not.toContain("resume");
@@ -55,6 +55,8 @@ describe("intentum extension registration", () => {
     ]);
     expect(transformers).toBe(1);
     expect(events).toEqual([
+      "session_start",
+      "session_shutdown",
       "message_update",
       "message_end",
       "turn_end",

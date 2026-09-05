@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { detectNerdFont, installSymbolsFont, SYMBOLS_FONT_FILE, SYMBOLS_FONT_URL, userFontDirectory } from "../src/tui/nerd-font.mjs";
-import { resolveSymbolPreset } from "../src/tui/symbols.mjs";
+import { resolveSymbolPreset, symbolPreset } from "../src/tui/symbols.mjs";
 
 const TRUETYPE = Buffer.concat([Buffer.from([0, 1, 0, 0]), Buffer.alloc(64, 7)]);
 
@@ -52,10 +52,23 @@ describe("Nerd Font detection", () => {
     expect(userFontDirectory({ platform: "linux", env: {}, home })).toBe(join(home, ".local", "share", "fonts"));
   });
 
-  it("chooses nerd icons only when INTENTUM_SYMBOLS is unset and a Nerd Font is reachable", async () => {
+  it("uses bundled symbols automatically and honours explicit presets", async () => {
     expect(await resolveSymbolPreset({ env: { INTENTUM_SYMBOLS: "ascii", TERM_PROGRAM: "ghostty" } })).toBe("ascii");
     expect(await resolveSymbolPreset({ env: { TERM_PROGRAM: "wezterm" }, home })).toBe("nerd");
     expect(await resolveSymbolPreset({ env: {}, home, platform: "linux" })).toBe("unicode");
+  });
+
+  it("falls back when a font is installed but terminal support is unconfirmed", async () => {
+    await mkdir(join(home, "Library", "Fonts"), { recursive: true });
+    await writeFile(join(home, "Library", "Fonts", "SymbolsNerdFontMono-Regular.ttf"), TRUETYPE);
+    const options = { platform: "darwin", home, env: { TERM_PROGRAM: "iTerm.app" } };
+    expect(await detectNerdFont(options)).toMatchObject({ kind: "font" });
+    expect(await resolveSymbolPreset({ env: { TERM_PROGRAM: "ghostty" } })).toBe("nerd");
+    expect(await resolveSymbolPreset(options)).toBe("unicode");
+    expect(symbolPreset({})).toBe("unicode");
+    expect(await resolveSymbolPreset({ ...options, env: { INTENTUM_SYMBOLS: "nerd" } })).toBe("nerd");
+    expect(symbolPreset({})).toBe("nerd");
+    expect(await resolveSymbolPreset(options)).toBe("unicode");
   });
 });
 

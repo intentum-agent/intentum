@@ -10,6 +10,7 @@ import {
   reducedMotionEnabled,
 } from "../src/tui/session-chrome.js";
 import { installThinkingPresentation } from "../src/tui/thinking-presentation.js";
+import { registerModelPicker } from "../src/tools/model-picker-host.js";
 
 export default function intentumExtension(pi: ExtensionAPI): void {
   let runtime: IntentumRuntime | undefined;
@@ -20,6 +21,7 @@ export default function intentumExtension(pi: ExtensionAPI): void {
   };
 
   registerIntentumCommands(pi, requireRuntime);
+  registerModelPicker(pi);
   registerDesignerTools(pi, requireRuntime);
   // Reasoning and tool activity render in the transcript style; the working
   // row pulses while the Designer thinks and returns to its indicator after.

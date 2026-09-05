@@ -129,7 +129,8 @@ verified) into your user font directory — `~/Library/Fonts` on macOS,
 the status line can use the same icons as Oh My Pi. It never runs during `npm install`:
 package managers block lifecycle scripts, and a font download that writes into your
 home directory should be a command you ran on purpose. `intentum fonts` shows whether a
-Nerd Font is already reachable; `doctor` reports the same line.
+Nerd Font is installed; `doctor` reports the same line. Configure your terminal to use
+it as a fallback, then set `INTENTUM_SYMBOLS=nerd` to enable icons.
 
 ## Development checkout
 
@@ -189,11 +190,12 @@ refreshed at most every three seconds while the footer repaints.
 `INTENTUM_SYMBOLS` selects the glyph set: `nerd` (Nerd Font icons, the same code points
 Oh My Pi's status line uses), `unicode` (single-cell glyphs any modern font carries), or
 `ascii` (`in:`, `out:`, `ctx:`, `@` branch, `>•` mark; also plain box rules in the
-welcome card). When it is unset Intentum picks `nerd` if a Nerd Font is installed
-(any `*NerdFont*.ttf` under the user or system font directories) or the terminal bundles
-the symbols (Ghostty, WezTerm), and `unicode` otherwise, so nobody sees boxes by
-default. The launcher says so once per start until you run `intentum fonts install` or
-set the variable.
+welcome card). When it is unset Intentum picks `nerd` for terminals that bundle the
+symbols (Ghostty, WezTerm), and `unicode` otherwise. Finding an installed Nerd Font
+does not confirm the current terminal uses it for fallback. For other terminals,
+configure a Nerd Font and set `INTENTUM_SYMBOLS=nerd`, or keep the ordinary symbols
+with `INTENTUM_SYMBOLS=unicode`. The launcher explains this once per start until the
+variable is set.
 
 Above the editor nothing is shown while the project is idle; the widget appears only for
 a completed result awaiting integration, a blocked or failed Worker, or a blocking
@@ -264,6 +266,31 @@ The target repository must already have `HEAD`; Intentum refuses to create a Wor
 
 ## Interaction model
 
+The Designer model picker uses Intentum's quiet rounded frame and theme colors,
+occupying 94% of the terminal width and 90% of its height, with more visible rows
+as the terminal grows.
+Wide terminals show providers, models, and details side by side; narrow terminals
+use Ctrl+P to open the provider list and stack model details below the models.
+It highlights the current model and previews context/output limits, reasoning,
+image support, and catalog token prices. The full Pi provider catalogue stays
+visible, with ready providers first and unconnected providers marked `○`.
+Choose an unconnected provider or model with Enter to open Pi's native login flow;
+the picker reopens afterwards and preserves the editor draft. Multiple provider
+connections coexist. Available models and `--models` scopes come from Pi;
+out-of-scope models are browsable but cannot be applied. Switching is
+available between turns. `/model <reference>` keeps Pi's direct selection and
+thinking-suffix behavior; `/models <search>` opens a filtered picker.
+
+Mouse controls work in regular and fullscreen mode: click a provider to filter,
+click a model to preview, scroll either list, then click **Use model** or **Connect**
+to apply. Click a provider's star or **Pin provider** button (or press Ctrl+F)
+to keep that provider at the top of the provider list. Pins are stored in
+`~/.pi/agent/intentum/provider-pins.json` (respecting `PI_CODING_AGENT_DIR`);
+on first use, up to three pins are seeded from the current provider and this
+session's most frequently selected providers. Unpinning is persistent, and
+pinning a provider leaves the current model and model-list order unchanged.
+Close with the top-right × or Esc. Mouse capture ends when the picker closes.
+
 Normal conversation remains the primary interface. The Designer inspects the existing repository, drafts charter and architecture from that evidence, identifies the most important residual uncertainty, and asks at most one important product question at a time — usually to confirm a draft, not to start from scratch. Deterministic operations are delegated to Intentum tools rather than simulated in the Designer chat.
 
 Typical flow:
@@ -285,6 +312,7 @@ takes precedence over extension commands.
 | Command | Effect |
 | --- | --- |
 | `/intentum` or `/panel` | Open the control panel (overview, workers, decisions, help). Text help in RPC mode. |
+| `/models [search]` or `/model` | Open the Designer model picker: type to search, Ctrl+P to browse all providers, ↑/↓ or PgUp/PgDn to browse, Tab/Shift+Tab to cycle providers, Enter to choose or connect, Esc to go back or cancel. The configured Pi model-selection shortcut opens it too. |
 | `/help` | Show the commands relevant to the current project state. |
 | `/init [name]` | Idempotently initialize state and product artifacts. |
 | `/status` | Show the current phase, autonomy, active feature, Worker, and decision summary as text. |
@@ -313,7 +341,7 @@ measures the checked-in assets and selects a layout from `process.stdout.columns
 
 An unknown width is treated as 80 columns. Only the `o`/`@` Signal point cells are
 colored; the arms and wordmark keep the terminal's default foreground. The compact
-mark is the Nerd Font icon when one is detected or `INTENTUM_SYMBOLS=nerd` is set, `⋗`
+mark is the Nerd Font icon when the terminal bundles it or `INTENTUM_SYMBOLS=nerd` is set, `⋗`
 under `unicode`, and `>•` under `ascii` for fonts that render neither.
 
 `intentum --help` and `intentum --version` show the lockup. `pi-intentum` is the

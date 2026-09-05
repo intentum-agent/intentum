@@ -234,6 +234,10 @@ describe("intentum session footer", () => {
   });
 
   it("swaps glyph sets per symbol preset", () => {
+    const unicode = renderFooterLine({ ...SESSION, state: busyState(), symbols: "unicode" }, 400);
+    expect(unicode).not.toMatch(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/u);
+    expect(unicode).toContain("◫ 6.1%/272K");
+    expect(unicode).toContain("⚠ 1 attention");
     const nerd = renderFooterLine({ ...SESSION, state: projectState(), symbols: "nerd" }, 200);
     expect(nerd).toContain(" \u{F08C9} Fixture Product · ");
     expect(nerd).toContain("\uF126 main *10 +5");

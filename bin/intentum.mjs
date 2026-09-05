@@ -601,10 +601,10 @@ async function nerdFontStatus(env, platform) {
   }
   const source = await detectNerdFont({ env, platform });
   if (source?.kind === "terminal") return { status: "ok", detail: `${source.name} bundles the symbols; icons enabled` };
-  if (source) return { status: "ok", detail: `${source.path}; icons enabled` };
+  if (source) return { status: "info", detail: `${source.path}; installed, terminal fallback unconfirmed; using unicode (INTENTUM_SYMBOLS=nerd enables icons)` };
   return {
     status: "info",
-    detail: "not found; the status line uses plain glyphs. Run `intentum fonts install` for icons, or set INTENTUM_SYMBOLS=unicode to keep them",
+    detail: "not found; using unicode. Run `intentum fonts install`, configure the terminal font, then set INTENTUM_SYMBOLS=nerd for icons",
   };
 }
 
@@ -626,8 +626,8 @@ async function runFonts({ stdout, stderr, env, platform, fetch: fetchImpl, symbo
     const { path, installed } = await installSymbolsFont({ env, platform, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
     writeLines(stdout, [
       installed ? `${mark(symbols)} installed ${path}` : `${mark(symbols)} already installed: ${path}`,
-      "Open a new terminal window so it picks the font up. Terminals fall back to it for icon",
-      "glyphs on their own; Kitty users add it with symbol_map if the icons still show as boxes.",
+      "Configure your terminal to use this font for icon fallback, then open a new terminal window.",
+      "Set INTENTUM_SYMBOLS=nerd to enable icons; otherwise unconfirmed terminals use Unicode glyphs.",
     ]);
     return 0;
   } catch (error) {
@@ -656,7 +656,7 @@ async function launchPi({ piArgs, initialMessage, stderr, env, cwd, spawn, symbo
   else if (!repo.hasHead) hints.push("this repository has no commits yet; make a first commit before starting a Worker.");
   else if (!repo.branch) hints.push("HEAD is detached; check out a named branch before starting a Worker.");
   if (symbols !== "nerd" && !explicitSymbolPreset(env)) {
-    hints.push("no Nerd Font found, so the status line uses plain glyphs. `intentum fonts install` adds the icons; INTENTUM_SYMBOLS=unicode silences this.");
+    hints.push("terminal Nerd Font support is unconfirmed; using plain glyphs. Configure a Nerd Font and set INTENTUM_SYMBOLS=nerd for icons; INTENTUM_SYMBOLS=unicode silences this.");
   }
   // Platform limits are reported by `intentum doctor`, not on every launch.
   for (const hint of hints) stderr.write(`${mark(symbols)} intentum: ${hint}\n`);
