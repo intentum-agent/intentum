@@ -46,7 +46,7 @@ export function userFontDirectory(options = {}) {
   return join(env.XDG_DATA_HOME || join(home, ".local", "share"), "fonts");
 }
 
-/** Every directory a terminal's font fallback can draw from, user first. */
+/** Standard font installation directories, user first. */
 export function fontDirectories(options = {}) {
   const { platform, env, home } = environment(options);
   const user = userFontDirectory({ platform, env, home });
@@ -56,9 +56,9 @@ export function fontDirectories(options = {}) {
 }
 
 /**
- * How Nerd Font glyphs would reach the screen: a terminal that bundles them,
- * or an installed Nerd Font (patched family or symbols-only). Undefined when
- * neither is present, in which case icons should fall back to plain glyphs.
+ * Find bundled terminal symbols or an installed Nerd Font (patched family or
+ * symbols-only). An installed file is informational: it does not confirm the
+ * current terminal selects that font or uses it as a fallback.
  *
  * @param {FontEnvironment & { directories?: readonly string[] }} [options]
  * @returns {Promise<{ kind: "terminal", name: string } | { kind: "font", path: string } | undefined>}

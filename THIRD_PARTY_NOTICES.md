@@ -11,6 +11,12 @@ The session status line in `src/tui/session-chrome.ts` — icon-led segments joi
 facts on the left and token, cost, and context usage on the right — is derived from the
 status line of Oh My Pi, <https://github.com/can1357/oh-my-pi>.
 
+The model picker in `src/tui/model-picker.ts` takes interaction inspiration from
+Oh My Pi's `modes/components/model-picker.ts`, `model-browser.ts`, and `model-hub.ts`:
+searchable model rows, a current-model marker, selection details, and a provider
+catalogue with native login entry points. Intentum implements
+its own responsive layout, provider filters, and Pi extension adapter.
+
 The transcript rendering is derived from the same project: the rounded state-colored
 tool frame, status header, collapsed-preview and JSON-tree conventions in
 `src/tui/tool-frame.ts` (from `tui/output-block.ts`, `tui/status-line.ts`,

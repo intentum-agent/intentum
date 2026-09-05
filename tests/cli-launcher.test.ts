@@ -88,10 +88,10 @@ describe("intentum launcher", () => {
     expect(stderr.output).toBe("");
   });
 
-  it("nudges toward `intentum fonts install` only while no Nerd Font is reachable and no preset is chosen", async () => {
+  it("explains fallback only while terminal support is unconfirmed and no preset is chosen", async () => {
     const stderr = captureStream();
     await runCli([], { stdout: captureStream(), stderr, env, cwd: repo.repo, spawn: recordingSpawn([]), platform: "linux" });
-    expect(stderr.output).toBe("⋗ intentum: no Nerd Font found, so the status line uses plain glyphs. `intentum fonts install` adds the icons; INTENTUM_SYMBOLS=unicode silences this.\n");
+    expect(stderr.output).toBe("⋗ intentum: terminal Nerd Font support is unconfirmed; using plain glyphs. Configure a Nerd Font and set INTENTUM_SYMBOLS=nerd for icons; INTENTUM_SYMBOLS=unicode silences this.\n");
 
     const bundled = captureStream();
     await runCli([], { stdout: captureStream(), stderr: bundled, env: { ...env, TERM_PROGRAM: "WezTerm" }, cwd: repo.repo, spawn: recordingSpawn([]), platform: "linux" });
@@ -347,7 +347,7 @@ describe("intentum doctor", () => {
     await writeFile(join(home, "Library", "Fonts", "HackNerdFontMono-Regular.ttf"), Buffer.from([0, 1, 0, 0]));
     const detected = captureStream();
     await runCli(["doctor"], { stdout: detected, stderr: captureStream(), env, cwd: repo.repo, spawn: recordingSpawn([]), platform: "darwin" });
-    expect(detected.output).toContain(`✓ Nerd Font        ${join(home, "Library", "Fonts", "HackNerdFontMono-Regular.ttf")}; icons enabled`);
+    expect(detected.output).toContain(`${join(home, "Library", "Fonts", "HackNerdFontMono-Regular.ttf")}; installed, terminal fallback unconfirmed; using unicode (INTENTUM_SYMBOLS=nerd enables icons)`);
   });
 });
 
