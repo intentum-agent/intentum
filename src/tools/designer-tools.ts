@@ -5,6 +5,7 @@ import type { IntentumRuntime } from "../runtime/intentum-runtime.js";
 import type { IntentumRuntimeSource } from "./commands.js";
 import type { ProjectPhase } from "../state/schema.js";
 import type { ProjectArtifact } from "../state/project-store.js";
+import { createWorkRenderers, integrateRenderers, projectRenderers, workerRenderers } from "./transcript/designer-renderers.js";
 
 const phaseSchema = StringEnum([
   "discovery",
@@ -25,6 +26,8 @@ export function registerDesignerTools(pi: ExtensionAPI, runtimeSource: IntentumR
     description: "Read or update durable product artifacts and move through the explicit project lifecycle.",
     promptSnippet: "Use intentum_project for charter, architecture, status, and lifecycle changes.",
     executionMode: "sequential",
+    renderShell: "self",
+    ...projectRenderers,
     parameters: Type.Object({
       action: StringEnum(["status", "read_artifact", "write_artifact", "transition"] as const),
       artifact: Type.Optional(StringEnum(["charter", "architecture"] as const)),
@@ -56,6 +59,8 @@ export function registerDesignerTools(pi: ExtensionAPI, runtimeSource: IntentumR
     description: "Create and start one broad outcome-based WorkContract in an independent Pi Worker and Git worktree.",
     promptSnippet: "Use intentum_create_work for a complete vertical slice grounded in existing repository files (touchHints, contextFiles), not a greenfield rewrite or microtasks.",
     executionMode: "sequential",
+    renderShell: "self",
+    ...createWorkRenderers,
     parameters: Type.Object({
       featureId: Type.String({ minLength: 1 }),
       title: Type.String({ minLength: 1 }),
@@ -103,6 +108,8 @@ export function registerDesignerTools(pi: ExtensionAPI, runtimeSource: IntentumR
     description: "Inspect, safely pause, steer, resume, or explicitly abort the current Phase 2 Worker.",
     promptSnippet: "Use intentum_worker to operate the persistent Worker without replacing its session.",
     executionMode: "sequential",
+    renderShell: "self",
+    ...workerRenderers,
     parameters: Type.Object({
       action: StringEnum(["inspect", "pause", "steer", "resume", "abort"] as const),
       workerId: Type.String({ minLength: 1 }),
@@ -133,6 +140,8 @@ export function registerDesignerTools(pi: ExtensionAPI, runtimeSource: IntentumR
     description: "Verify and deterministically merge a completed Worker result into its recorded target branch.",
     promptSnippet: "Use intentum_integrate only after structured Worker completion.",
     executionMode: "sequential",
+    renderShell: "self",
+    ...integrateRenderers,
     parameters: Type.Object({ workerId: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const runtime = resolveRuntime(runtimeSource);

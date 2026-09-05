@@ -11,6 +11,16 @@ The session status line in `src/tui/session-chrome.ts` — icon-led segments joi
 facts on the left and token, cost, and context usage on the right — is derived from the
 status line of Oh My Pi, <https://github.com/can1357/oh-my-pi>.
 
+The transcript rendering is derived from the same project: the rounded state-colored
+tool frame, status header, collapsed-preview and JSON-tree conventions in
+`src/tui/tool-frame.ts` (from `tui/output-block.ts`, `tui/status-line.ts`,
+`tools/render-utils.ts`, `tools/json-tree.ts`, `tools/default-renderer.ts`); the
+shared spinner ticker in `src/tui/live-ticker.ts` and the per-tool frames in
+`src/tools/transcript/` (from `modes/components/tool-execution.ts`, `tools/read-renderer.ts`,
+`tools/bash.ts`, `tui/code-cell.ts`); the thinking pulse, speed gauge, and prose fold in
+`src/tui/thinking-pulse.ts` and `src/tui/thinking-display.ts` (from
+`modes/components/assistant-message.ts` and `utils/thinking-display.ts`).
+
 ```
 MIT License
 

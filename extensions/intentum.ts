@@ -2,7 +2,14 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { IntentumRuntime } from "../src/runtime/intentum-runtime.js";
 import { clearIntentumWelcome, registerIntentumCommands } from "../src/tools/commands.js";
 import { registerDesignerTools } from "../src/tools/designer-tools.js";
-import { installSessionChrome } from "../src/tui/session-chrome.js";
+import { registerBuiltinToolRenderers } from "../src/tools/transcript/builtin-renderers.js";
+import {
+  designerWorkingIndicator,
+  hostChromeStyle,
+  installSessionChrome,
+  reducedMotionEnabled,
+} from "../src/tui/session-chrome.js";
+import { installThinkingPresentation } from "../src/tui/thinking-presentation.js";
 
 export default function intentumExtension(pi: ExtensionAPI): void {
   let runtime: IntentumRuntime | undefined;
@@ -14,6 +21,13 @@ export default function intentumExtension(pi: ExtensionAPI): void {
 
   registerIntentumCommands(pi, requireRuntime);
   registerDesignerTools(pi, requireRuntime);
+  // Reasoning and tool activity render in the transcript style; the working
+  // row pulses while the Designer thinks and returns to its indicator after.
+  const reducedMotion = reducedMotionEnabled();
+  installThinkingPresentation(pi, {
+    idleIndicator: (ctx) => designerWorkingIndicator(hostChromeStyle(ctx), reducedMotion),
+    reducedMotion,
+  });
 
   pi.on("session_start", async (_event, ctx) => {
     // A restored/reloaded Pi session must never replay the one-time welcome frame.
@@ -21,6 +35,9 @@ export default function intentumExtension(pi: ExtensionAPI): void {
     disposeChrome?.();
     if (runtime) await runtime.dispose();
     runtime = new IntentumRuntime(ctx.cwd);
+    // Pi's built-in tools keep their behavior; only their transcript frames
+    // change. They need the session cwd, so this waits for the session.
+    registerBuiltinToolRenderers(pi, ctx.cwd);
     const recovery = await runtime.onSessionStart(ctx);
     // Pi's startup hints and three-line footer give way to one card and one line.
     disposeChrome = await installSessionChrome(runtime, ctx);

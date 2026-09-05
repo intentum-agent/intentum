@@ -20,6 +20,7 @@ The implementation is a real **Phase 1 + single-Worker Phase 2 controller slice*
 - a bounded Designer system-context injection;
 - a one-time, responsive terminal welcome sourced from the shipped brand assets;
 - a quiet session chrome: a startup card in place of Pi's key hints, a one-line footer, an attention-only widget above the editor, and a keyboard-first command center with regular-mode mouse support;
+- a transcript in the Oh My Pi idiom: every tool call is one rounded, state-colored frame with a status header, and the working row becomes a breathing "thinking" pulse with a tok/s badge while the Designer reasons;
 - command-only RPC loading and initialization without a provider request.
 
 ### Phase 2 — one strong Worker
@@ -227,6 +228,37 @@ feedback. Set `INTENTUM_REDUCED_MOTION=1` to keep the same state labels with sta
 glyphs.
 Choosing a decision in the panel drafts the message into the editor; you still send
 it to the Designer yourself.
+
+### Transcript: tool frames and the thinking pulse
+
+Tool activity renders the way Oh My Pi draws it. Every call — Pi's built-in `read`,
+`bash`, `edit`, `write`, `grep`, `find`, `ls` and the `intentum_*` Designer tools — is
+one rounded frame whose border follows the call's state: accent while pending or
+running, dim once it succeeded, red on error, yellow when a command was aborted or
+timed out. The header line carries a status glyph (`○` pending, a braille spinner
+while running, `✔`/`✘` settled), the tool title, its subject, and dim meta such as
+`2 matches · limit 2 reached`. Bodies come from the arguments while the call streams
+(the command, the file being written, the diff previewed against disk) and gain a
+labeled `Output` section when the result lands, so the block never jumps. Collapsed
+previews keep the live edge behind `… N earlier lines [ctrl+o: Expand]`; the key in
+the hint follows your Pi keybinding. All live spinners share one 80 ms ticker and
+advance in lockstep.
+
+Behavior is untouched: the built-in overrides spread Pi's own tool definitions and
+replace only `renderCall`/`renderResult`, so `execute`, schemas, and prompt snippets
+stay Pi's. They register at `session_start` because the frames need the session cwd.
+
+While the Designer reasons, the working row under the transcript turns into the
+thinking pulse: a fixed-width starburst (`✻ ✼ ❉ ❊ ✺ ✹ ✸ ✶`) breathing on an eased
+70–230 ms cadence, beside `Thinking · 1.2K · 45.3 toks/s` once the provider streams
+reasoning tokens — the rate badge fades from dim gray toward the accent as speed
+climbs, and the count and rate self-suppress for providers that only report usage at
+turn end. The row returns to the `Designer working` indicator as soon as text or a
+tool call starts. A hidden thinking block in the transcript shows `✻ Thinking`;
+visible thinking is folded to prose (fenced code becomes `…`, empty `<!-- -->`
+reasoning-summary markers disappear). `INTENTUM_SYMBOLS=ascii` swaps the frame,
+spinner, and pulse glyphs for `+-|`, `|/-\`, and `*+x+`; `INTENTUM_REDUCED_MOTION=1`
+freezes the pulse on its first facet.
 
 The target repository must already have `HEAD`; Intentum refuses to create a Worker from an unborn branch. Review project-local package resources before trusting a project in Pi.
 

@@ -25,12 +25,16 @@ describe("intentum extension registration", () => {
     const commands: string[] = [];
     const tools: string[] = [];
     const events: string[] = [];
+    let transformers = 0;
     const fake = {
       registerCommand(name: string) {
         commands.push(name);
       },
       registerTool(tool: { name: string }) {
         tools.push(tool.name);
+      },
+      registerMarkdownTransformer() {
+        transformers++;
       },
       on(event: string) {
         events.push(event);
@@ -42,13 +46,23 @@ describe("intentum extension registration", () => {
     expect(commands).toContain("help");
     // Pi's built-in /resume wins dispatch, so project resume is never shadowed by an alias.
     expect(commands).not.toContain("resume");
+    // Built-in tool frames need the session cwd, so they register at session_start.
     expect(tools).toEqual([
       "intentum_project",
       "intentum_create_work",
       "intentum_worker",
       "intentum_integrate",
     ]);
-    expect(events).toEqual(["session_start", "before_agent_start", "session_shutdown"]);
+    expect(transformers).toBe(1);
+    expect(events).toEqual([
+      "message_update",
+      "message_end",
+      "turn_end",
+      "agent_end",
+      "session_start",
+      "before_agent_start",
+      "session_shutdown",
+    ]);
   });
 
   it("keeps an established project trust decision when a context has no trust probe", async () => {
@@ -458,6 +472,7 @@ describe("intentum extension registration", () => {
     const fake = {
       registerCommand() {},
       registerTool() {},
+      registerMarkdownTransformer() {},
       on(event: string, handler: (event: unknown, context: ExtensionContext) => Promise<unknown>) {
         handlers.set(event, handler);
       },
@@ -509,6 +524,7 @@ describe("intentum extension registration", () => {
     const fake = {
       registerCommand() {},
       registerTool() {},
+      registerMarkdownTransformer() {},
       on(event: string, handler: (event: unknown, context: ExtensionContext) => Promise<unknown>) {
         handlers.set(event, handler);
       },

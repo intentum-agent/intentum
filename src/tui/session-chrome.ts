@@ -362,6 +362,23 @@ export function designerWorkingIndicator(
 }
 
 /**
+ * The host theme mapped onto the chrome tones; plain when the host (RPC,
+ * tests) exposes no theme. Shared by the footer, the working indicator, and
+ * the thinking pulse so every surface agrees on one palette.
+ */
+export function hostChromeStyle(ctx: Pick<ExtensionContext, "ui">): ChromeStyle {
+  try {
+    const hostTheme = ctx.ui.theme as ThemeLike | undefined;
+    if (hostTheme && typeof hostTheme.fg === "function" && typeof hostTheme.bold === "function") {
+      return themeStyle(hostTheme);
+    }
+  } catch {
+    // Test/RPC-like shims may omit the theme getter.
+  }
+  return PLAIN_CHROME_STYLE;
+}
+
+/**
  * Replace Pi's startup header and footer for the life of this session.
  * Returns a disposer that restores both. Hosts without header/footer support
  * (RPC, tests) are left untouched.
@@ -372,22 +389,15 @@ export async function installSessionChrome(runtime: IntentumRuntime, ctx: Extens
     return () => {};
   }
 
-  let indicatorStyle = PLAIN_CHROME_STYLE;
-  try {
-    const hostTheme = ctx.ui.theme as ThemeLike | undefined;
-    if (hostTheme && typeof hostTheme.fg === "function" && typeof hostTheme.bold === "function") {
-      indicatorStyle = themeStyle(hostTheme);
-    }
-  } catch {
-    // Test/RPC-like shims may omit the theme getter.
-  }
-  const working = designerWorkingIndicator(indicatorStyle, reducedMotionEnabled());
+  const working = designerWorkingIndicator(hostChromeStyle(ctx), reducedMotionEnabled());
   try {
     ui.setWorkingMessage?.(working.message);
     ui.setWorkingIndicator?.({
       frames: [...working.frames],
       ...(working.intervalMs === undefined ? {} : { intervalMs: working.intervalMs }),
     });
+    // A hidden thinking block reads as the pulse at rest; Pi styles the label.
+    ui.setHiddenThinkingLabel?.(`${SYMBOL_SETS[symbolPreset()].pulse[0]} Thinking`);
   } catch {
     // Older compatible hosts may not expose working-indicator customization.
   }
@@ -398,6 +408,7 @@ export async function installSessionChrome(runtime: IntentumRuntime, ctx: Extens
     try {
       ui.setWorkingIndicator?.();
       ui.setWorkingMessage?.();
+      ui.setHiddenThinkingLabel?.();
     } catch {
       // Restoration is best-effort while the TUI is shutting down.
     }

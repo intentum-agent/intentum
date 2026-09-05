@@ -12,6 +12,31 @@ import { detectNerdFont } from "./nerd-font.mjs";
  * @typedef {import("./symbols.d.mts").SymbolSet} SymbolSet
  */
 
+/**
+ * Transcript glyphs shared by every preset where a modern font renders them:
+ * braille spinner, starburst thinking pulse, rounded frame, tree connectors.
+ * Nerd Font terminals draw the same box and braille cells, so only the status
+ * icons differ per preset.
+ */
+const UNICODE_TRANSCRIPT = Object.freeze({
+  spinner: Object.freeze(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+  pulse: Object.freeze(["✻", "✼", "❉", "❊", "✺", "✹", "✸", "✶"]),
+  box: Object.freeze({
+    topLeft: "╭",
+    topRight: "╮",
+    bottomLeft: "╰",
+    bottomRight: "╯",
+    horizontal: "─",
+    vertical: "│",
+    teeRight: "├",
+    teeLeft: "┤",
+  }),
+  tree: Object.freeze({ branch: "├─", last: "└─", vertical: "│" }),
+  dot: " · ",
+  bracketLeft: "[",
+  bracketRight: "]",
+});
+
 /** @type {Readonly<Record<SymbolPreset, SymbolSet>>} */
 export const SYMBOL_SETS = Object.freeze({
   nerd: Object.freeze({
@@ -33,6 +58,17 @@ export const SYMBOL_SETS = Object.freeze({
     output: "\uF08B",
     cost: "\uF155",
     context: "\uE70F",
+    status: Object.freeze({
+      success: "\uF00C",
+      done: "•",
+      error: "\uF00D",
+      warning: "\uF12A",
+      info: "\uF129",
+      pending: "\uF254",
+      running: "\uF110",
+      aborted: "\uF04D",
+    }),
+    ...UNICODE_TRANSCRIPT,
   }),
   unicode: Object.freeze({
     // U+22D7 GREATER-THAN WITH DOT: the prompt chevron and its point.
@@ -53,6 +89,17 @@ export const SYMBOL_SETS = Object.freeze({
     output: "↓",
     cost: "",
     context: "◫",
+    status: Object.freeze({
+      success: "✔",
+      done: "•",
+      error: "✘",
+      warning: "⚠",
+      info: "ⓘ",
+      pending: "○",
+      running: "⟳",
+      aborted: "⏹",
+    }),
+    ...UNICODE_TRANSCRIPT,
   }),
   ascii: Object.freeze({
     mark: ">•",
@@ -72,6 +119,32 @@ export const SYMBOL_SETS = Object.freeze({
     output: "out:",
     cost: "",
     context: "ctx:",
+    status: Object.freeze({
+      success: "[ok]",
+      done: "*",
+      error: "[!!]",
+      warning: "[!]",
+      info: "[i]",
+      pending: "[ ]",
+      running: "[~]",
+      aborted: "[-]",
+    }),
+    spinner: Object.freeze(["|", "/", "-", "\\"]),
+    pulse: Object.freeze(["*", "+", "x", "+"]),
+    box: Object.freeze({
+      topLeft: "+",
+      topRight: "+",
+      bottomLeft: "+",
+      bottomRight: "+",
+      horizontal: "-",
+      vertical: "|",
+      teeRight: "+",
+      teeLeft: "+",
+    }),
+    tree: Object.freeze({ branch: "|--", last: "`--", vertical: "|" }),
+    dot: " - ",
+    bracketLeft: "[",
+    bracketRight: "]",
   }),
 });
 
